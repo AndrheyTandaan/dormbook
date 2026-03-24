@@ -10,15 +10,42 @@ const { OAuth2Client } = require('google-auth-library');
 const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const http = require('http');
+const { Server } = require('socket.io');
 
 const admin = require("firebase-admin");
-const serviceAccount = require("./serviceAccountKey.json");
+
+let serviceAccount;
+
+// Load Firebase credentials - try multiple methods for flexibility
+if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    // Method 1: JSON string in env var (Render recommended)
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+} else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    // Method 2: Path to credentials file in env var
+    serviceAccount = require(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+} else {
+    // Method 3: Local file (for local development)
+    try {
+        serviceAccount = require("./serviceAccountKey.json");
+    } catch (error) {
+        console.error(
+            "Firebase credentials not found. Set FIREBASE_SERVICE_ACCOUNT_JSON env var or provide serviceAccountKey.json locally."
+        );
+        process.exit(1);
+    }
+}
+
+const firebaseDatabaseURL = process.env.FIREBASE_DATABASE_URL;
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
+    ...(firebaseDatabaseURL ? { databaseURL: firebaseDatabaseURL } : {}),
 });
 
 const db = admin.firestore();
+const rtdb = firebaseDatabaseURL ? admin.database() : null; // Optional: use if you mirror to RTDB
+
 
 // --- FIRESTORE INITIALIZATION ---
 async function initializeFirestore() {
@@ -95,11 +122,29 @@ const uploadProfile = multer({
 });
 
 // --- EXPRESS SETUP ---
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: '*',
+        methods: ['GET', 'POST']
+    }
+});
+
 app.use(cors());
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+
+// --- SOCKET.IO SETUP ---
+io.on('connection', (socket) => {
+    console.log('Socket connected:', socket.id);
+
+    socket.on('disconnect', () => {
+        console.log('Socket disconnected:', socket.id);
+    });
+});
 
 // --- SESSION & PASSPORT SETUP ---
 app.use(session({
@@ -193,6 +238,26 @@ async function logAction(adminName, details) {
         console.error('Error logging action:', error);
     }
 }
+
+// --- FIRESTORE REALTIME BROADCAST ---
+function setupRealtimeBroadcast() {
+    db.collection('dorms').onSnapshot(snapshot => {
+        const dorms = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        io.emit('dorms:updated', dorms);
+    }, err => console.error('Firestore dorms snapshot error:', err));
+
+    db.collection('bookings').onSnapshot(snapshot => {
+        const bookings = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        io.emit('bookings:updated', bookings);
+    }, err => console.error('Firestore bookings snapshot error:', err));
+
+    db.collection('users').onSnapshot(snapshot => {
+        const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        io.emit('users:updated', users);
+    }, err => console.error('Firestore users snapshot error:', err));
+}
+
+setupRealtimeBroadcast();
 
 // --- AUTH ROUTES ---
 app.post('/api/register', async (req, res) => {
@@ -561,4 +626,5 @@ app.get(/^/, (req, res) => {
     }
 });
 
-app.listen(3000, () => console.log('🚀 Server running at http://localhost:3000'));
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));
