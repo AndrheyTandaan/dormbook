@@ -265,7 +265,7 @@
                         </span>
                     </td>
                     <td class="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase">
-                        ${new Date(user.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        ${user.created_at ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown'}
                     </td>
                     <td class="px-8 py-6 text-right flex justify-end gap-2">
                         <button onclick="toggleRole('${user.id}', '${user.role}')" class="bg-gray-50 hover:bg-indigo-600 hover:text-white text-indigo-600 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition shadow-sm border border-gray-100">

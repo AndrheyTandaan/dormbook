@@ -430,13 +430,22 @@ app.put('/api/users/:id/profile', async (req, res) => {
 app.get('/api/admin/users', async (req, res) => {
     try {
         const usersSnapshot = await db.collection('users').orderBy('created_at', 'desc').get();
-        const users = usersSnapshot.docs.map(doc => ({
-            id: doc.id,
-            name: doc.data().name,
-            email: doc.data().email,
-            role: doc.data().role,
-            created_at: doc.data().created_at
-        }));
+        const users = usersSnapshot.docs.map(doc => {
+            const userData = doc.data();
+            const createdAt = userData.created_at;
+            // Convert Firestore Timestamp to ISO string
+            const createdAtISO = createdAt && typeof createdAt.toDate === 'function' 
+                ? createdAt.toDate().toISOString()
+                : (createdAt?._seconds ? new Date(createdAt._seconds * 1000).toISOString() : null);
+            
+            return {
+                id: doc.id,
+                name: userData.name,
+                email: userData.email,
+                role: userData.role,
+                created_at: createdAtISO
+            };
+        });
         res.json(users);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -449,13 +458,25 @@ app.get('/api/users/:id', async (req, res) => {
         const userDoc = await db.collection('users').doc(id).get();
         if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
         const userData = userDoc.data();
+        
+        // Convert Firestore Timestamp to ISO string
+        const createdAt = userData.created_at;
+        const createdAtISO = createdAt && typeof createdAt.toDate === 'function' 
+            ? createdAt.toDate().toISOString()
+            : (createdAt?._seconds ? new Date(createdAt._seconds * 1000).toISOString() : null);
+        
+        const lastLogin = userData.last_login;
+        const lastLoginISO = lastLogin && typeof lastLogin.toDate === 'function' 
+            ? lastLogin.toDate().toISOString()
+            : (lastLogin?._seconds ? new Date(lastLogin._seconds * 1000).toISOString() : null);
+        
         res.json({
             id: userDoc.id,
             name: userData.name,
             email: userData.email,
             role: userData.role,
-            created_at: userData.created_at,
-            last_login: userData.last_login
+            created_at: createdAtISO,
+            last_login: lastLoginISO
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
