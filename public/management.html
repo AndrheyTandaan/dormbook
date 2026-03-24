@@ -491,8 +491,8 @@ async function fetchDueDates() {
                         </td>
                         <td class="p-6">
                             <div class="flex justify-center gap-2">
-                                <button onclick="updateStatus(${b.id}, 'Approved', '${safeAdminName}')" class="px-4 py-2 bg-black text-white rounded-xl text-[10px] font-black uppercase hover:bg-indigo-600 transition">Approve</button>
-                                <button onclick="updateStatus(${b.id}, 'Rejected', '${safeAdminName}')" class="px-4 py-2 bg-gray-100 text-gray-400 rounded-xl text-[10px] font-black uppercase hover:bg-red-50 hover:text-red-600 transition">Reject</button>
+                                <button onclick="updateStatus('${b.id}', 'Approved', '${safeAdminName}')" class="px-4 py-2 bg-black text-white rounded-xl text-[10px] font-black uppercase hover:bg-indigo-600 transition">Approve</button>
+                                <button onclick="updateStatus('${b.id}', 'Rejected', '${safeAdminName}')" class="px-4 py-2 bg-gray-100 text-gray-400 rounded-xl text-[10px] font-black uppercase hover:bg-red-50 hover:text-red-600 transition">Reject</button>
                             </div>
                         </td>
                     </tr>`).join('');
