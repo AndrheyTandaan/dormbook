@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Action Log | DormBook</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Optional: simple spin animation for the refresh icon */
+        .spin-anim { animation: spin 0.8s linear; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <nav class="p-6 bg-white shadow-sm flex justify-between items-center">
+        <a href="index.html" class="text-2xl font-black text-indigo-600 tracking-tighter">DormBook</a>
+        <div id="auth-links"></div>
+    </nav>
+
+    <div class="max-w-5xl mx-auto mt-10 p-6">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+            <div class="flex items-center gap-4">
+                <a href="index.html" class="w-10 h-10 flex items-center justify-center bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-100 hover:text-indigo-600 transition shadow-sm" title="Back to Home">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </a>
+                <div>
+                    <h2 class="text-3xl font-black text-gray-900">System Action Log</h2>
+                    <p class="text-gray-500 text-sm">Tracking all administrative changes and updates. <span class="text-indigo-400 font-medium ml-1">(Auto-refreshing)</span></p>
+                </div>
+            </div>
+            
+            <button onclick="fetchLogs()" class="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 font-bold rounded-xl hover:bg-indigo-100 transition text-sm">
+                <i id="refresh-icon" class="fa-solid fa-rotate"></i> Refresh Now
+            </button>
+        </div>
+
+        <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+            <table class="w-full text-left border-collapse">
+                <thead class="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                        <th class="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Admin</th>
+                        <th class="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Action Details</th>
+                        <th class="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody id="logs-table-body">
+                    </tbody>
+            </table>
+            <div id="no-logs" class="hidden p-20 text-center">
+                <i class="fa-solid fa-clipboard-list text-gray-200 text-5xl mb-4 block"></i>
+                <p class="text-gray-400 font-medium">No activity recorded yet.</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="main.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const user = JSON.parse(localStorage.getItem('user'));
+            // Safety check: Redirect if not admin
+            if (!user || user.role !== 'admin') {
+                window.location.href = 'index.html';
+                return;
+            }
+            
+            // Initial load
+            fetchLogs();
+
+            // --- AUTO REFRESH LOGIC ---
+            // Fetches data every 10 seconds (10000 milliseconds)
+            setInterval(() => {
+                fetchLogs(true); // 'true' means it's a silent background refresh
+            }, 10000); 
+        });
+
+        async function fetchLogs(isAuto = false) {
+            const tbody = document.getElementById('logs-table-body');
+            const icon = document.getElementById('refresh-icon');
+            
+            // Add spin animation to icon if manually clicked
+            if (!isAuto && icon) {
+                icon.classList.add('spin-anim');
+                setTimeout(() => icon.classList.remove('spin-anim'), 800);
+            }
+
+            try {
+                const res = await fetch('/api/admin/logs');
+                const logs = await res.json();
+                renderLogs(logs);
+            } catch (err) {
+                console.error("Failed to fetch logs", err);
+                if (!isAuto) {
+                    tbody.innerHTML = `<tr><td colspan="3" class="p-4 text-center text-red-500">Error loading logs.</td></tr>`;
+                }
+            }
+        }
+
+        function renderLogs(logs) {
+            const tbody = document.getElementById('logs-table-body');
+            const noLogs = document.getElementById('no-logs');
+            
+            // We compare content to avoid flickering during auto-refresh
+            let newContent = '';
+
+            if (!logs || logs.length === 0) {
+                noLogs.classList.remove('hidden');
+                tbody.innerHTML = '';
+                return;
+            }
+
+            noLogs.classList.add('hidden');
+            logs.forEach(log => {
+                const date = new Date(log.timestamp).toLocaleString(undefined, {
+                    dateStyle: 'medium',
+                    timeStyle: 'short'
+                });
+                
+                newContent += `
+                    <tr class="border-b border-gray-50 hover:bg-gray-50/50 transition">
+                        <td class="p-4">
+                            <div class="flex items-center gap-2">
+                                <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold">
+                                    ${log.admin_name ? log.admin_name.charAt(0) : 'A'}
+                                </div>
+                                <span class="font-bold text-gray-800">${log.admin_name}</span>
+                            </div>
+                        </td>
+                        <td class="p-4 text-gray-600 text-sm">
+                            <span class="bg-gray-100 px-2 py-1 rounded text-gray-700 font-mono text-xs mr-2">ACTION</span>
+                            ${log.action_details}
+                        </td>
+                        <td class="p-4 text-gray-400 text-xs font-medium italic">
+                            ${date}
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            tbody.innerHTML = newContent;
+        }
+    </script>
+</body>
+</html>

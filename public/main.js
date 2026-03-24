@@ -1,0 +1,356 @@
+let allDorms = []; // Store original data for filtering
+let currentBookingData = {}; // Temporary storage for form data before payment
+
+document.addEventListener('DOMContentLoaded', () => {
+    updateNavbar();
+    loadDorms();
+
+    // Event Listeners for Filtering
+    document.getElementById('filter-btn').addEventListener('click', applyFilters);
+    
+    document.getElementById('reset-btn').addEventListener('click', () => {
+        document.getElementById('search-input').value = '';
+        document.getElementById('price-filter').value = 'all';
+        renderDorms(allDorms);
+    });
+
+    // Real-time search as you type
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) searchInput.addEventListener('input', applyFilters);
+});
+
+async function loadDorms() {
+    try {
+        const res = await fetch('/api/dorms');
+        allDorms = await res.json();
+        renderDorms(allDorms);
+    } catch (err) {
+        console.error("Failed to load dorms", err);
+    }
+}
+
+function applyFilters() {
+    const searchTerm = document.getElementById('search-input').value.toLowerCase();
+    const priceRange = document.getElementById('price-filter').value;
+
+    const filtered = allDorms.filter(dorm => {
+        const matchesName = dorm.name.toLowerCase().includes(searchTerm);
+        
+        const numericPrice = parseInt(dorm.price.toString().replace(/[^0-9]/g, '')) || 0;
+        let matchesPrice = true;
+
+        if (priceRange === 'low') matchesPrice = numericPrice < 5000;
+        else if (priceRange === 'mid') matchesPrice = numericPrice >= 5000 && numericPrice <= 8000;
+        else if (priceRange === 'high') matchesPrice = numericPrice > 8000;
+
+        return matchesName && matchesPrice;
+    });
+
+    renderDorms(filtered);
+}
+
+function renderDorms(dorms) {
+    const container = document.getElementById('dorm-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const user = JSON.parse(localStorage.getItem('user'));
+
+    if (dorms.length === 0) {
+        container.innerHTML = `<div class="col-span-full text-center py-10 text-gray-400 font-medium">No dormitories match your filters.</div>`;
+        return;
+    }
+
+    dorms.forEach(dorm => {
+        const isGoogleLink = dorm.image_url && dorm.image_url.includes('google.com/imgres');
+        const imgPath = (!dorm.image_url || isGoogleLink) 
+            ? 'https://placehold.co/600x400?text=Invalid+Image+URL' 
+            : dorm.image_url;
+
+        let adminActions = '';
+        let bookButton = '';
+
+        if (user && user.role === 'admin') {
+            adminActions = `
+                <div class="flex gap-2 mt-2">
+                    <button onclick="openEditModal(${dorm.id})" class="flex-1 border border-indigo-200 text-indigo-600 py-2 rounded-xl text-xs font-bold hover:bg-indigo-50 transition">Edit</button>
+                    <button onclick="deleteDorm(${dorm.id})" class="flex-1 border border-red-200 text-red-500 py-2 rounded-xl text-xs font-bold hover:bg-red-50 transition">Delete</button>
+                </div>
+            `;
+        } else {
+            bookButton = `<button onclick="openBookingModal('${dorm.name}', '${dorm.description.replace(/'/g, "\\'")}')" class="w-full bg-black text-white py-3 rounded-xl font-bold hover:bg-gray-800 transition">Book Now</button>`;
+        }
+
+        container.innerHTML += `
+            <div class="bg-white rounded-3xl p-4 border border-gray-100 shadow-sm hover:shadow-md transition">
+                <img src="${imgPath}" 
+                     onerror="this.src='https://placehold.co/600x400?text=Photo+Unavailable'"
+                     class="w-full h-48 object-cover rounded-2xl mb-4 bg-gray-50">
+                <div class="flex justify-between items-start mb-2">
+                    <h3 class="text-xl font-bold">${dorm.name}</h3>
+                    <span class="bg-indigo-50 text-indigo-600 text-xs font-bold px-2 py-1 rounded-lg">${dorm.price}</span>
+                </div>
+                <p class="text-gray-500 text-sm mb-4 line-clamp-2">${dorm.description}</p>
+                <div class="space-y-2">
+                    ${bookButton}
+                    ${adminActions}
+                </div>
+            </div>`;
+    });
+}
+
+function updateNavbar() {
+    let user = JSON.parse(localStorage.getItem('user'));
+    
+    if (!user) {
+        // Check session for Google login
+        fetch('/api/session-user')
+            .then(res => res.json())
+            .then(data => {
+                if (data.user) {
+                    user = data.user;
+                    localStorage.setItem('user', JSON.stringify(user));
+                    // Update navbar now
+                    renderNavbar(user);
+                } else {
+                    renderNavbar(null);
+                }
+            })
+            .catch(() => renderNavbar(null));
+    } else {
+        renderNavbar(user);
+    }
+}
+
+function renderNavbar(user) {
+    const authLinks = document.getElementById('auth-links');
+    
+    if (user && authLinks) {
+        const historyLabel = user.role === 'admin' ? 'Action Log' : 'My History';
+        const historyPath = user.role === 'admin' ? 'admin_logs.html' : 'bookings_list.html';
+        
+        const adminLink = user.role === 'admin' 
+            ? `<a href="admin.html" class="text-sm font-bold text-red-500">Admin Panel</a>` 
+            : '';
+
+        authLinks.innerHTML = `
+            <div class="flex items-center gap-4">
+                ${adminLink}
+                <a href="${historyPath}" class="text-sm font-bold text-indigo-600">${historyLabel}</a>
+                <span class="text-gray-700 font-medium text-sm">Hi, ${user.name}</span>
+                <button onclick="logout()" class="text-red-500 text-xs font-bold uppercase">Logout</button>
+            </div>`;
+    }
+}
+
+// --- UPDATED EDIT LOGIC (WITH LOGGING) ---
+function openEditModal(id) {
+    const dorm = allDorms.find(d => d.id === id);
+    if (!dorm) return;
+
+    const modal = document.getElementById('booking-modal');
+    const formContent = document.getElementById('modal-form-content');
+    
+    document.getElementById('modal-room-name').innerText = "Edit Dorm Listing";
+    const descElement = document.getElementById('modal-room-desc');
+    if (descElement) descElement.innerText = "Update the details for " + dorm.name;
+
+    formContent.innerHTML = `
+        <form id="edit-dorm-form" class="space-y-4">
+            <div class="space-y-1">
+                <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Dorm Name</label>
+                <input type="text" name="name" value="${dorm.name}" class="w-full bg-gray-50 border border-gray-100 p-4 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" required>
+            </div>
+            <div class="space-y-1">
+                <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Price</label>
+                <input type="text" name="price" value="${dorm.price}" class="w-full bg-gray-50 border border-gray-100 p-4 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" required>
+            </div>
+            <div class="space-y-1">
+                <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Image URL</label>
+                <input type="text" name="image_url" value="${dorm.image_url || ''}" class="w-full bg-gray-50 border border-gray-100 p-4 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div class="space-y-1">
+                <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Description</label>
+                <textarea name="description" class="w-full bg-gray-50 border border-gray-100 p-4 rounded-xl h-24 outline-none focus:ring-2 focus:ring-indigo-500" required>${dorm.description}</textarea>
+            </div>
+            <div class="flex gap-3 pt-2">
+                <button type="button" onclick="closeModal()" class="flex-1 bg-gray-100 text-gray-500 py-4 rounded-xl font-bold">Cancel</button>
+                <button type="submit" class="flex-[2] bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg">Save Changes</button>
+            </div>
+        </form>
+    `;
+
+    modal.classList.remove('hidden');
+    document.body.classList.add('modal-open');
+
+    document.getElementById('edit-dorm-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const user = JSON.parse(localStorage.getItem('user'));
+        const formData = new FormData(e.target);
+        
+        const updatedData = {
+            name: formData.get('name'),
+            price: formData.get('price'),
+            image_url: formData.get('image_url'),
+            description: formData.get('description'),
+            adminName: user ? user.name : 'Admin' // Send admin name for logging
+        };
+
+        try {
+            const res = await fetch(`/api/dorms/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updatedData)
+            });
+
+            if (res.ok) {
+                alert("Dorm updated successfully!");
+                closeModal();
+                loadDorms();
+            }
+        } catch (err) { console.error(err); }
+    });
+}
+
+// --- UPDATED DELETE LOGIC (WITH LOGGING) ---
+async function deleteDorm(id) {
+    if (!confirm("Are you sure you want to delete this dorm?")) return;
+    
+    const user = JSON.parse(localStorage.getItem('user'));
+    const adminName = user ? user.name : 'Admin';
+
+    try {
+        // We pass adminName as a query parameter so the server knows who deleted it
+        const res = await fetch(`/api/dorms/${id}?adminName=${encodeURIComponent(adminName)}`, { 
+            method: 'DELETE' 
+        });
+        
+        if (res.ok) {
+            alert("Deleted successfully");
+            loadDorms();
+        } else {
+            const errorData = await res.json();
+            alert("Error: " + errorData.error);
+        }
+    } catch (err) { console.error(err); }
+}
+
+// ... (Rest of your Booking/Modal/Payment logic remains the same)
+function openBookingModal(name, description) {
+    if (!localStorage.getItem('user')) {
+        alert("Please login first to book a room.");
+        return window.location.href = 'auth.html';
+    }
+
+    const modal = document.getElementById('booking-modal');
+    const formContent = document.getElementById('modal-form-content');
+    
+    document.getElementById('modal-room-name').innerText = name;
+    const descElement = document.getElementById('modal-room-desc');
+    if (descElement) descElement.innerText = description;
+
+    formContent.innerHTML = `
+        <div class="mb-6">
+            <h3 class="text-xl font-bold text-gray-800">Reservation Details</h3>
+        </div>
+        <form id="booking-form" class="space-y-4">
+            <div class="space-y-1">
+                <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Move-in Date</label>
+                <input type="date" name="start_date" class="w-full bg-gray-50 border border-gray-100 p-4 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition" required>
+            </div>
+            <div class="space-y-1">
+                <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Duration (Months)</label>
+                <input type="number" name="duration" id="booking-duration" class="w-full bg-gray-50 border border-gray-100 p-4 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition" placeholder="e.g. 6" min="1" max="60" required>
+            </div>
+            <div class="space-y-1">
+                <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Special Requests</label>
+                <textarea name="special_request" class="w-full bg-gray-50 border border-gray-100 p-4 rounded-xl h-24 outline-none focus:ring-2 focus:ring-indigo-500 transition" placeholder="Anything else we should know?"></textarea>
+            </div>
+            <div class="flex gap-3 pt-2">
+                <button type="button" onclick="closeModal()" class="flex-1 bg-gray-100 text-gray-500 py-4 rounded-xl font-bold hover:bg-gray-200 transition">Cancel</button>
+                <button type="submit" class="flex-[2] bg-indigo-600 text-white py-4 rounded-xl font-bold hover:bg-indigo-700 transition shadow-lg">Proceed to Payment</button>
+            </div>
+        </form>
+    `;
+
+    modal.classList.remove('hidden');
+    document.body.classList.add('modal-open');
+
+    document.getElementById('booking-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const user = JSON.parse(localStorage.getItem('user'));
+        const formData = new FormData(e.target);
+        const rawDuration = formData.get('duration');
+        
+        currentBookingData = {
+            user_id: user.id,
+            room_name: name,
+            start_date: formData.get('start_date'),
+            duration: rawDuration + " Months", 
+            special_request: formData.get('special_request')
+        };
+        openPaymentModal();
+    });
+}
+
+function openPaymentModal() {
+    const bookingModal = document.getElementById('booking-modal');
+    const paymentModal = document.getElementById('payment-modal');
+    if (bookingModal) bookingModal.classList.add('hidden');
+    if (paymentModal) paymentModal.classList.remove('hidden');
+}
+
+async function handleBookingSubmit() {
+    const fileInput = document.getElementById('receipt-upload');
+    if (!fileInput.files[0]) {
+        alert("Please upload your payment receipt first.");
+        return;
+    }
+    const finalData = new FormData();
+    finalData.append('user_id', currentBookingData.user_id);
+    finalData.append('room_name', currentBookingData.room_name);
+    finalData.append('start_date', currentBookingData.start_date);
+    finalData.append('duration', currentBookingData.duration);
+    finalData.append('special_request', currentBookingData.special_request);
+    finalData.append('receipt', fileInput.files[0]);
+
+    const confirmBtn = document.getElementById('confirm-payment-btn');
+    confirmBtn.innerText = "Processing...";
+    confirmBtn.disabled = true;
+
+    try {
+        const res = await fetch('/api/book', { method: 'POST', body: finalData });
+        if (res.ok) {
+            document.getElementById('payment-modal-content').innerHTML = `
+                <div class="text-center py-6">
+                    <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-2xl mx-auto mb-4">
+                        <i class="fa-solid fa-check"></i>
+                    </div>
+                    <h2 class="text-xl font-black mb-1">Booking Sent!</h2>
+                    <p class="text-gray-500 text-xs mb-6">Your request has been submitted.</p>
+                    <button onclick="location.reload();" class="bg-black text-white px-8 py-2.5 rounded-xl font-bold text-sm">Done</button>
+                </div>
+            `;
+        }
+    } catch (err) {
+        console.error(err);
+        alert("Server error.");
+        confirmBtn.disabled = false;
+    }
+}
+
+function closeModal() {
+    const modal = document.getElementById('booking-modal');
+    const paymentModal = document.getElementById('payment-modal');
+    if (modal) modal.classList.add('hidden');
+    if (paymentModal) paymentModal.classList.add('hidden');
+    document.body.classList.remove('modal-open');
+}
+
+function logout() {
+    localStorage.removeItem('user');
+    // Clear session
+    fetch('/auth/logout').then(() => {
+        window.location.href = 'index.html';
+    });
+}

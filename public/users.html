@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Management | DormBook</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { background-color: #f9fafb; min-height: 100vh; overflow-y: auto !important; }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+        }
+        .dropdown-menu {
+            display: none;
+            transform-origin: top;
+            animation: slideIn 0.2s ease-out;
+        }
+        .dropdown-menu.show { display: block; }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        #switch-account-menu { display: none !important; pointer-events: none; opacity: 0; transition: opacity 0.2s ease-out; }
+        #switch-account-menu:not(.hidden) { display: flex !important; pointer-events: auto; opacity: 1; }
+        #sidebar-drawer { transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        #sidebar-overlay.active { opacity: 1; pointer-events: auto; }
+
+        .mobile-only { display: flex !important; }
+
+        .table-container { overflow-x: auto; }
+    </style>
+</head>
+<body class="text-gray-900">
+
+    <nav class="fixed top-0 left-0 right-0 flex justify-between items-center px-8 py-4 bg-white/80 backdrop-blur-md border-b z-50 min-h-16">
+        <div class="text-xl font-bold flex items-center gap-2 cursor-pointer" onclick="window.location.href='index.html'">
+            <i class="fa-solid fa-building-circle-check text-indigo-600"></i> DormBook
+        </div>
+        <div id="nav-center" class="absolute left-1/2 transform -translate-x-1/2 hidden md:flex gap-8 items-center justify-center"></div>
+        <div id="nav-right" class="flex justify-end items-center gap-4"></div>
+    </nav>
+
+    <div class="pt-20"></div>
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] opacity-0 pointer-events-none transition-opacity duration-300"></div>
+    
+    <div id="sidebar-drawer" class="fixed top-0 right-0 h-full w-80 bg-white z-[70] shadow-2xl transform translate-x-full p-8 flex flex-col overflow-hidden">
+        <div class="flex justify-between items-center mb-8">
+            <span class="text-[10px] font-black uppercase text-gray-400 tracking-widest">Account</span>
+            <div class="flex gap-2">
+                <button type="button" id="switch-account-icon-btn" onclick="toggleSwitchAccountMenu(event)" class="w-12 h-12 flex items-center justify-center bg-gray-100 rounded-2xl border hover:bg-gray-200 transition cursor-pointer" title="Switch Account">
+                    <i class="fa-solid fa-arrow-right-arrow-left text-gray-600"></i>
+                </button>
+                <button onclick="toggleSidebar()" class="w-12 h-12 flex flex-col items-center justify-center bg-gray-100 rounded-2xl border hover:bg-gray-200 transition">
+                    <i class="fa-solid fa-xmark text-gray-500"></i>
+                </button>
+            </div>
+        </div>
+        <div id="switch-account-menu" class="dropdown-menu hidden w-full bg-white rounded-2xl shadow-lg border border-gray-200 p-2 mb-4 overflow-y-auto max-h-40"></div>
+        <div id="sidebar-profile-box" class="mb-10"></div>
+        <div id="sidebar-links" class="space-y-2 flex-grow overflow-y-auto pr-2"></div>
+        <button onclick="logout()" class="w-full bg-red-50 text-red-600 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-100 transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-right-from-bracket"></i> Logout
+        </button>
+    </div>
+
+    <div class="max-w-6xl mx-auto p-8 pt-12">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-10">
+            <div>
+                <h1 class="text-4xl font-black uppercase tracking-tight">User Management</h1>
+                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Control access and user roles</p>
+            </div>
+            <div class="bg-white px-6 py-4 rounded-[2rem] shadow-sm border border-gray-100 text-center min-w-[140px]">
+                <p class="text-[9px] font-black text-gray-400 uppercase tracking-widest">Total Users</p>
+                <p id="total-users" class="text-2xl font-black text-indigo-600">0</p>
+            </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-3xl shadow-sm border border-gray-100 mb-8 flex gap-4">
+            <div class="relative flex-grow">
+                <i class="fa-solid fa-magnifying-glass absolute left-5 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                <input type="text" id="user-search" onkeyup="filterUsers()" placeholder="Search by name or email..." class="w-full pl-14 pr-6 py-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm font-bold">
+            </div>
+        </div>
+
+        <div class="glass-card rounded-[2.5rem] shadow-2xl mb-20 overflow-hidden">
+            <div class="table-container">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-gray-900/5 border-b border-gray-100">
+                            <th class="px-8 py-6 text-[10px] font-black uppercase text-gray-400 tracking-widest">User Identity</th>
+                            <th class="px-8 py-6 text-[10px] font-black uppercase text-gray-400 tracking-widest">Role</th>
+                            <th class="px-8 py-6 text-[10px] font-black uppercase text-gray-400 tracking-widest">Member Since</th>
+                            <th class="px-8 py-6 text-[10px] font-black uppercase text-gray-400 tracking-widest text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="user-table-body">
+                        <tr>
+                            <td colspan="4" class="p-20 text-center">
+                                <i class="fa-solid fa-circle-notch fa-spin text-indigo-600 text-2xl mb-4"></i>
+                                <p class="text-xs font-black text-gray-400 uppercase tracking-widest">Fetching User Data...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allUsers = [];
+        const currentUser = JSON.parse(localStorage.getItem('user'));
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!currentUser || currentUser.role !== 'admin') {
+                window.location.href = 'index.html';
+                return;
+            }
+            setupNavbar();
+            loadUsers();
+        });
+
+        function setupNavbar() {
+            const navCenter = document.getElementById('nav-center');
+            const navRight = document.getElementById('nav-right');
+            const sidebarLinks = document.getElementById('sidebar-links');
+
+            navCenter.innerHTML = `
+                <div class="flex items-center gap-8">
+                    <a href="index.html" class="text-xs font-black text-gray-500 hover:text-indigo-600 uppercase tracking-widest transition-all">Home</a>
+                    <div class="relative">
+                        <button onclick="toggleDropdown(event, 'management-dropdown')" class="text-xs font-black text-gray-500 uppercase tracking-widest hover:text-indigo-600 transition-all flex items-center gap-2">
+                            Management <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                        </button>
+                        <div id="management-dropdown" class="dropdown-menu absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 text-left overflow-hidden">
+                            <a href="management.html#pending-section" class="block px-5 py-2.5 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                                <i class="fa-solid fa-envelope-open-text mr-2 text-indigo-500"></i> Pending Requests
+                            </a>
+                            <a href="management.html#due-dates-section" class="block px-5 py-2.5 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                                <i class="fa-solid fa-calendar-day mr-2 text-indigo-500"></i> Resident Due Dates
+                            </a>
+                            <a href="management.html#inventory-section" class="block px-5 py-2.5 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                                <i class="fa-solid fa-door-open mr-2 text-indigo-500"></i> Room Inventory
+                            </a>
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <button onclick="toggleDropdown(event, 'panel-dropdown')" class="text-xs font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-600 flex items-center gap-2">
+                            Panel <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                        </button>
+                        <div id="panel-dropdown" class="dropdown-menu absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 overflow-hidden">
+                            <a href="admin_panel.html" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                                <i class="fa-solid fa-circle-plus mr-2 text-sm text-indigo-500"></i> Add New Room
+                            </a>
+                            <a href="users.html" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                                <i class="fa-solid fa-users-gear mr-2 text-sm text-indigo-500"></i> User Management
+                            </a>
+                        </div>
+                    </div>
+                    <a href="book_history.html" class="text-xs font-black text-gray-500 uppercase tracking-widest hover:text-indigo-600 transition-all">History</a>
+                </div>
+            `;
+
+            navRight.innerHTML = `
+                <button onclick="toggleSidebar()" class="mobile-only w-12 h-12 flex flex-col items-center justify-center bg-gray-100 rounded-2xl border border-gray-200 hover:bg-gray-200 transition">
+                    <div class="w-6 h-0.5 bg-gray-800 mb-1"></div>
+                    <div class="w-6 h-0.5 bg-gray-800 mb-1"></div>
+                    <div class="w-6 h-0.5 bg-gray-800"></div>
+                </button>
+            `;
+
+            sidebarLinks.innerHTML = `
+                <a href="index.html" class="flex items-center gap-4 p-4 rounded-2xl text-xs font-black uppercase tracking-widest text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 transition">
+                    <i class="fa-solid fa-house"></i> Home
+                </a>
+                <div class="relative">
+                    <button onclick="toggleDropdown(event, 'sidebar-management')" class="w-full flex justify-between items-center p-4 rounded-2xl text-xs font-black uppercase tracking-widest text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 transition">
+                        <span class="flex items-center gap-4"><i class="fa-solid fa-list-check w-4"></i> Management</span>
+                        <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                    </button>
+                    <div id="sidebar-management" class="dropdown-menu w-full bg-white rounded-2xl shadow-sm border border-gray-100 py-2 mt-1 overflow-hidden">
+                        <a href="management.html#pending-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                            <i class="fa-solid fa-envelope-open-text mr-2 text-indigo-500"></i> Pending Requests
+                        </a>
+                        <a href="management.html#due-dates-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                            <i class="fa-solid fa-calendar-day mr-2 text-indigo-500"></i> Resident Due Dates
+                        </a>
+                        <a href="management.html#inventory-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                            <i class="fa-solid fa-door-open mr-2 text-indigo-500"></i> Room Inventory
+                        </a>
+                    </div>
+                </div>
+                <div class="relative">
+                    <button onclick="toggleDropdown(event, 'sidebar-panel')" class="w-full flex justify-between items-center p-4 rounded-2xl text-xs font-black uppercase tracking-widest text-indigo-600 hover:bg-indigo-50 hover:text-indigo-600 transition">
+                        <span class="flex items-center gap-4"><i class="fa-solid fa-sliders w-4"></i> Panel</span>
+                        <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                    </button>
+                    <div id="sidebar-panel" class="dropdown-menu w-full bg-white rounded-2xl shadow-sm border border-gray-100 py-2 mt-1 overflow-hidden">
+                        <a href="admin_panel.html" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                            <i class="fa-solid fa-circle-plus mr-2 text-sm text-indigo-500"></i> Add New Room
+                        </a>
+                        <a href="users.html" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                            <i class="fa-solid fa-users-gear mr-2 text-sm text-indigo-500"></i> User Management
+                        </a>
+                    </div>
+                </div>
+                <a href="book_history.html" class="flex items-center gap-4 p-4 rounded-2xl text-xs font-black uppercase tracking-widest text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 transition">
+                    <i class="fa-solid fa-clock-rotate-left"></i> History
+                </a>
+            `;
+
+            document.getElementById('sidebar-profile-box').innerHTML = `
+                <div class="flex items-center gap-4 bg-gray-50 p-4 rounded-[2rem] border border-gray-100">
+                    <div class="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
+                        <i class="fa-solid fa-user-shield text-lg"></i>
+                    </div>
+                    <div class="text-left">
+                        <p class="text-[9px] font-black text-indigo-500 uppercase leading-none">admin</p>
+                        <p class="text-sm font-bold text-gray-800">${currentUser.name}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function loadUsers() {
+            const tbody = document.getElementById('user-table-body');
+            try {
+                const res = await fetch('http://localhost:3000/api/admin/users'); 
+                if (!res.ok) throw new Error("Fetch failed");
+                allUsers = await res.json();
+                renderTable(allUsers);
+            } catch (err) {
+                console.error("Load Error:", err);
+                tbody.innerHTML = `<tr><td colspan="4" class="p-20 text-center text-red-400 uppercase text-xs font-black">Failed to connect to server<br><span class="text-[10px] font-bold text-gray-400 mt-2 block">Check terminal or database</span></td></tr>`;
+            }
+        }
+
+        function renderTable(users) {
+            const tbody = document.getElementById('user-table-body');
+            document.getElementById('total-users').innerText = users.length;
+            
+            if (users.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="p-10 text-center text-gray-400 font-bold uppercase text-[10px]">No users found</td></tr>`;
+                return;
+            }
+            
+            tbody.innerHTML = users.map(user => `
+                <tr class="border-b border-gray-50 hover:bg-white/50 transition">
+                    <td class="px-8 py-6">
+                        <div class="flex items-center gap-4">
+                            <div class="w-10 h-10 rounded-xl ${user.role === 'admin' ? 'bg-indigo-600 text-white' : 'bg-gray-900 text-white'} flex items-center justify-center font-black shadow-lg">
+                                ${(user.name || 'U').charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                                <p class="text-sm font-black uppercase tracking-tight">${user.name || 'Unknown User'}</p>
+                                <p class="text-[10px] font-bold text-gray-400">${user.email || 'No Email'}</p>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-8 py-6">
+                        <span class="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${user.role === 'admin' ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'}">
+                            ${user.role}
+                        </span>
+                    </td>
+                    <td class="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase">
+                        ${new Date(user.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </td>
+                    <td class="px-8 py-6 text-right flex justify-end gap-2">
+                        <button onclick="toggleRole('${user.id}', '${user.role}')" class="bg-gray-50 hover:bg-indigo-600 hover:text-white text-indigo-600 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition shadow-sm border border-gray-100">
+                            Switch Role
+                        </button>
+                        <button onclick="deleteUser('${user.id}')" class="bg-red-50 hover:bg-red-600 hover:text-white text-red-600 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition shadow-sm border border-red-100">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function toggleSidebar() {
+            document.getElementById('sidebar-drawer').classList.toggle('translate-x-full');
+            document.getElementById('sidebar-overlay').classList.toggle('active');
+        }
+
+        function toggleDropdown(e, id) {
+            e.stopPropagation();
+            const menus = document.querySelectorAll('.dropdown-menu');
+            const target = document.getElementById(id);
+            menus.forEach(m => { if(m !== target) m.classList.remove('show'); });
+            target.classList.toggle('show');
+        }
+
+        window.onclick = () => document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('show'));
+
+        function logout() {
+            localStorage.removeItem('user');
+            window.location.href = 'auth.html';
+        }
+
+        function filterUsers() {
+            const searchTerm = document.getElementById('user-search').value.toLowerCase();
+            const filtered = allUsers.filter(u => 
+                (u.name || "").toLowerCase().includes(searchTerm) || 
+                (u.email || "").toLowerCase().includes(searchTerm)
+            );
+            renderTable(filtered);
+        }
+
+        async function toggleRole(userId, currentRole) {
+            const newRole = currentRole === 'admin' ? 'student' : 'admin';
+            if(confirm(`Change role to ${newRole.toUpperCase()}?`)) {
+                try {
+                    await fetch(`http://localhost:3000/api/admin/users/${userId}/role`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ role: newRole, adminName: currentUser.name })
+                    });
+                    loadUsers();
+                } catch (err) { alert("Error updating role"); }
+            }
+        }
+
+        async function deleteUser(userId) {
+            if(confirm("Permanently delete this user?")) {
+                try {
+                    await fetch(`http://localhost:3000/api/admin/users/${userId}?adminName=${currentUser.name}`, { method: 'DELETE' });
+                    loadUsers();
+                } catch (err) { alert("Error deleting user"); }
+            }
+        }
+
+        function logout() { localStorage.removeItem('user'); window.location.href = 'welcome.html'; }
+
+        function openAccountSelectorFromList(idx) {
+            const switchUsers = window.__switchUsers || JSON.parse(localStorage.getItem('savedUsers') || '[]');
+            const selected = switchUsers[idx];
+            if (!selected) return;
+
+            fetch(`/api/users/${selected.id}/last_login`, { method: 'PATCH' })
+                .catch(() => console.warn('Could not update last_login in DB'))
+                .finally(() => {
+                    localStorage.setItem('user', JSON.stringify(selected));
+                    const destination = (selected.role === 'admin') ? 'admin_panel.html' : 'index.html';
+                    window.location.href = destination;
+                });
+        }
+
+        async function loadSwitchAccounts() {
+            const menu = document.getElementById('switch-account-menu');
+            if (!menu) return;
+
+            let savedUsers = [];
+            try {
+                const usersRes = await fetch('/api/users?t=' + Date.now());
+                if (usersRes.ok) savedUsers = await usersRes.json();
+            } catch (err) {
+                console.warn('Failed to load users from DB, falling back to localStorage', err);
+            }
+
+            if (savedUsers.length === 0) {
+                savedUsers = JSON.parse(localStorage.getItem('savedUsers') || '[]');
+            }
+
+            if (savedUsers.length === 0) {
+                menu.innerHTML = `<div class="px-3 py-2 text-xs text-gray-500">No saved users. <a href="auth.html" class="text-indigo-600 underline">Login/Register</a></div>`;
+                return;
+            }
+
+            window.__switchUsers = savedUsers;
+            menu.innerHTML = `<div class="flex flex-col space-y-1">
+                ${savedUsers.map((u, idx) => {
+                    const label = `${u.name || u.email || 'User'} (${u.role || 'user'})`;
+                    return `<button onclick="openAccountSelectorFromList(${idx})" class="w-full text-left px-3 py-2 text-xs font-black text-gray-700 hover:bg-gray-100 rounded-xl">${label}</button>`;
+                }).join('')}
+            </div>`;
+        }
+
+        function adjustSwitchAccountMenuDirection(button, menu) {
+            if (!button || !menu) return;
+            const rect = button.getBoundingClientRect();
+            const menuHeight = menu.offsetHeight || 180;
+            const viewportHeight = window.innerHeight;
+            const spaceBelow = viewportHeight - rect.bottom;
+            const spaceAbove = rect.top;
+
+            if (spaceBelow < menuHeight + 8 && spaceAbove > menuHeight + 8) {
+                menu.style.bottom = `${rect.height + 4}px`;
+                menu.style.top = 'auto';
+            } else {
+                menu.style.top = `${rect.height + 4}px`;
+                menu.style.bottom = 'auto';
+            }
+        }
+
+        function toggleSwitchAccountMenu(e) {
+            e.stopPropagation();
+            const menu = document.getElementById('switch-account-menu');
+
+            if (!menu) {
+                console.error('Menu element not found');
+                return;
+            }
+
+            const isHidden = menu.classList.contains('hidden');
+
+            if (isHidden) {
+                menu.classList.remove('hidden');
+                loadSwitchAccounts();
+            } else {
+                menu.classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>History | DormBook</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        html { scroll-behavior: smooth; overflow-y: scroll; scrollbar-gutter: stable; }
+        body { 
+            min-height: 100vh;
+            height: auto !important;
+            overflow-y: auto !important; 
+            scrollbar-gutter: stable; 
+            background-color: #f9fafb;
+        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+
+        .dropdown-menu {
+            display: none;
+            transform-origin: top;
+            animation: slideIn 0.2s ease-out;
+        }
+        .dropdown-menu.show { display: block; }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        #switch-account-menu { display: none !important; pointer-events: none; opacity: 0; transition: opacity 0.2s ease-out; }
+        #switch-account-menu:not(.hidden) { display: flex !important; pointer-events: auto; opacity: 1; }
+
+        #sidebar-drawer { transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        #sidebar-overlay.active { opacity: 1; pointer-events: auto; }
+
+        .mobile-only { display: flex !important; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 transition-colors duration-500">
+
+    <nav class="fixed top-0 left-0 right-0 flex justify-between items-center px-8 py-4 bg-white/80 backdrop-blur-md border-b z-50 min-h-16">
+        <div class="text-xl font-bold flex items-center gap-2 cursor-pointer" onclick="window.location.href='index.html'">
+            <i class="fa-solid fa-building-circle-check text-indigo-600"></i>
+            DormBook
+        </div>
+        <div id="nav-center" class="absolute left-1/2 transform -translate-x-1/2 hidden md:flex gap-8 items-center justify-center"></div>
+        <div id="nav-right" class="flex justify-end items-center gap-4"></div>
+    </nav>
+
+    <div class="pt-20"></div>
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] opacity-0 pointer-events-none transition-opacity duration-300"></div>
+    
+    <div id="sidebar-drawer" class="fixed top-0 right-0 h-full w-80 bg-white z-[70] shadow-2xl transform translate-x-full p-8 flex flex-col overflow-hidden">
+        <div class="flex justify-between items-center mb-8">
+            <span class="text-[10px] font-black uppercase text-gray-400 tracking-widest">Account</span>
+            <div class="flex gap-2">
+                <button type="button" id="switch-account-icon-btn" onclick="toggleSwitchAccountMenu(event)" class="w-12 h-12 flex items-center justify-center bg-gray-100 rounded-2xl border hover:bg-gray-200 transition cursor-pointer" title="Switch Account">
+                    <i class="fa-solid fa-arrow-right-arrow-left text-gray-600"></i>
+                </button>
+                <button onclick="toggleSidebar()" class="w-12 h-12 flex flex-col items-center justify-center bg-gray-100 rounded-2xl border hover:bg-gray-200 transition">
+                    <i class="fa-solid fa-xmark text-gray-500"></i>
+                </button>
+            </div>
+        </div>
+        <div id="switch-account-menu" class="dropdown-menu hidden w-full bg-white rounded-2xl shadow-lg border border-gray-200 p-2 mb-4 overflow-y-auto max-h-40"></div>
+        <div id="sidebar-profile-box" class="mb-10"></div>
+        <div id="sidebar-links" class="space-y-2 flex-grow overflow-y-auto pr-2"></div>
+        <button onclick="logout()" class="w-full bg-red-50 text-red-600 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-100 transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-right-from-bracket"></i> Logout
+        </button>
+    </div>
+
+    <div class="max-w-4xl mx-auto px-8 py-10">
+        <div class="flex justify-between items-center mb-10">
+            <div>
+                <h1 id="page-title" class="text-3xl font-black text-gray-900 uppercase tracking-tighter">My Bookings</h1>
+                <p id="page-subtitle" class="text-xs font-bold text-gray-400 uppercase">View and manage your reservations</p>
+            </div>
+        </div>
+        <div id="bookings-container" class="space-y-4"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const userJson = localStorage.getItem('user');
+            const user = userJson ? JSON.parse(userJson) : null;
+            if (!user) { window.location.href = 'auth.html'; return; }
+
+            setupNavbar(user);
+            fetchBookings(user);
+        });
+
+        function setupNavbar(user) {
+            const navCenter = document.getElementById('nav-center');
+            const navRight = document.getElementById('nav-right');
+            const sidebarLinks = document.getElementById('sidebar-links');
+            const sidebarProfile = document.getElementById('sidebar-profile-box');
+
+            navCenter.innerHTML = `
+                <div class="flex items-center gap-8">
+                    <a href="index.html" class="text-xs font-black text-gray-500 uppercase tracking-widest hover:text-indigo-600 transition-all">Home</a>
+                    ${user.role !== 'admin' ? `
+                        <div class="relative">
+                            <button onclick="toggleDropdown(event, 'user-stay-dropdown')" class="text-xs font-black text-gray-500 uppercase tracking-widest hover:text-indigo-600 transition-all flex items-center gap-2">
+                                My Stay <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                            </button>
+                            <div id="user-stay-dropdown" class="dropdown-menu absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 text-left overflow-hidden">
+                                <a href="my_stay.html#bookings" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                                    <i class="fa-solid fa-bed mr-2 text-indigo-500"></i> Bookings
+                                </a>
+                                <a href="my_stay.html#balances" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                                    <i class="fa-solid fa-wallet mr-2 text-indigo-500"></i> Balances
+                                </a>
+                                <a href="my_stay.html#due-dates" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                                    <i class="fa-solid fa-calendar-check mr-2 text-indigo-500"></i> Due Dates
+                                </a>
+                            </div>
+                        </div>
+                    ` : `
+                        <div class="relative">
+                            <button onclick="toggleDropdown(event, 'management-dropdown')" class="text-xs font-black text-gray-500 uppercase tracking-widest hover:text-indigo-600 transition-all flex items-center gap-2">
+                                Management <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                            </button>
+                            <div id="management-dropdown" class="dropdown-menu absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 text-left overflow-hidden">
+                                <a href="management.html#pending-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                                    <i class="fa-solid fa-envelope-open-text mr-2 text-indigo-500"></i> Pending Requests
+                                </a>
+                                <a href="management.html#due-dates-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                                    <i class="fa-solid fa-calendar-day mr-2 text-indigo-500"></i> Resident Due Dates
+                                </a>
+                                <a href="management.html#inventory-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                                    <i class="fa-solid fa-door-open mr-2 text-indigo-500"></i> Room Inventory
+                                </a>
+                            </div>
+                        </div>
+                        <div class="relative">
+                            <button onclick="toggleDropdown(event, 'panel-dropdown')" class="text-xs font-black text-gray-500 uppercase tracking-widest hover:text-indigo-600 transition-all flex items-center gap-2">
+                                Panel <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                            </button>
+                            <div id="panel-dropdown" class="dropdown-menu absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 text-left overflow-hidden">
+                                <a href="admin_panel.html#add-dorm-form-container" class="block px-5 py-4 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                                    <i class="fa-solid fa-plus-circle mr-2 text-sm text-indigo-500"></i> Add New Room
+                                </a>
+                                <a href="users.html" class="block px-5 py-4 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                                    <i class="fa-solid fa-users-gear mr-2 text-sm text-indigo-500"></i> User Management
+                                </a>
+                            </div>
+                        </div>
+                    `}
+                    <a href="book_history.html" class="text-xs font-black text-indigo-600 uppercase tracking-widest transition-all">History</a>
+                </div>
+            `;
+
+            navRight.innerHTML = `
+                ${user.role !== 'admin' ? `
+                <div class="relative hidden md:block">
+                    <button onclick="toggleDropdown(event, 'notif-dropdown')" class="w-12 h-12 flex items-center justify-center bg-gray-100 rounded-2xl border border-gray-200 hover:bg-gray-200 transition relative">
+                        <i class="fa-solid fa-bell text-gray-600"></i>
+                        <span id="notif-badge" class="hidden absolute top-3.5 right-4 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+                    </button>
+                    <div id="notif-dropdown" class="dropdown-menu absolute top-full right-0 mt-2 w-80 bg-white rounded-[2rem] shadow-2xl border border-gray-100 py-4 z-50 overflow-hidden text-left">
+                        <div class="px-6 py-2 border-b border-gray-50 mb-2">
+                            <span class="text-[10px] font-black uppercase text-gray-400 tracking-widest">Notifications</span>
+                        </div>
+                        <div id="notif-items" class="max-h-96 overflow-y-auto px-4 space-y-2">
+                            <p class="py-10 text-[10px] font-bold text-gray-400 uppercase italic text-center">No new alerts</p>
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
+
+                <button onclick="toggleSidebar()" class="mobile-only w-12 h-12 flex flex-col items-center justify-center bg-gray-100 rounded-2xl border border-gray-200 hover:bg-gray-200 transition">
+                    <div class="w-6 h-0.5 bg-gray-800 mb-1"></div>
+                    <div class="w-6 h-0.5 bg-gray-800 mb-1"></div>
+                    <div class="w-6 h-0.5 bg-gray-800"></div>
+                </button>
+            `;
+
+            sidebarLinks.innerHTML = `
+                <a href="index.html" class="flex items-center gap-4 p-4 rounded-2xl text-xs font-black uppercase tracking-widest text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 transition">
+                    <i class="fa-solid fa-house"></i> Home
+                </a>
+                ${user.role !== 'admin' ? `
+                    <div class="relative">
+                        <button onclick="toggleDropdown(event, 'sidebar-mystay-dropdown')" class="w-full flex justify-between items-center gap-4 p-4 rounded-2xl text-xs font-black uppercase tracking-widest text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 transition">
+                            <span class="flex items-center gap-4"><i class="fa-solid fa-house-user"></i> My Stay</span>
+                            <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                        </button>
+                        <div id="sidebar-mystay-dropdown" class="dropdown-menu w-full bg-white rounded-2xl shadow-sm border border-gray-100 py-2 mt-1 overflow-hidden p-0">
+                            <a href="my_stay.html#bookings" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                                <i class="fa-solid fa-bed mr-2 text-indigo-500"></i> Bookings
+                            </a>
+                            <a href="my_stay.html#balances" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                                <i class="fa-solid fa-wallet mr-2 text-indigo-500"></i> Balances
+                            </a>
+                            <a href="my_stay.html#due-dates" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                                <i class="fa-solid fa-calendar-days mr-2 text-indigo-500"></i> Due Dates
+                            </a>
+                        </div>
+                    </div>
+                ` : `
+                    <div class="relative">
+                        <button onclick="toggleDropdown(event, 'sidebar-management')" class="w-full flex justify-between items-center p-4 rounded-2xl text-xs font-black uppercase tracking-widest text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 transition">
+                            <span class="flex items-center gap-4"><i class="fa-solid fa-list-check w-4"></i> Management</span>
+                            <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                        </button>
+                        <div id="sidebar-management" class="dropdown-menu w-full bg-white rounded-2xl shadow-sm border border-gray-100 py-2 mt-1 overflow-hidden">
+                            <a href="management.html#pending-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                                <i class="fa-solid fa-envelope-open-text mr-2 text-indigo-500"></i> Pending Requests
+                            </a>
+                            <a href="management.html#due-dates-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                                <i class="fa-solid fa-calendar-day mr-2 text-indigo-500"></i> Resident Due Dates
+                            </a>
+                            <a href="management.html#inventory-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                                <i class="fa-solid fa-door-open mr-2 text-indigo-500"></i> Room Inventory
+                            </a>
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <button onclick="toggleDropdown(event, 'sidebar-panel')" class="w-full flex justify-between items-center p-4 rounded-2xl text-xs font-black uppercase tracking-widest text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 transition">
+                            <span class="flex items-center gap-4"><i class="fa-solid fa-sliders w-4"></i> Panel</span>
+                            <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                        </button>
+                        <div id="sidebar-panel" class="dropdown-menu w-full bg-white rounded-2xl shadow-sm border border-gray-100 py-2 mt-1 overflow-hidden">
+                            <a href="admin_panel.html" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                                <i class="fa-solid fa-circle-plus mr-2 text-sm text-indigo-500"></i> Add New Room
+                            </a>
+                            <a href="users.html" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                                <i class="fa-solid fa-users-gear mr-2 text-sm text-indigo-500"></i> User Management
+                            </a>
+                        </div>
+                    </div>
+                `}
+                <a href="book_history.html" class="flex items-center gap-4 p-4 rounded-2xl text-xs font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 transition">
+                    <i class="fa-solid fa-clock-rotate-left"></i> History
+                </a>
+            `;
+
+            sidebarProfile.innerHTML = `
+                <div class="flex items-center gap-4 bg-gray-50 p-4 rounded-[2rem] border border-gray-100">
+                    <div class="w-12 h-12 ${user.role === 'admin' ? 'bg-indigo-600' : 'bg-black'} rounded-2xl flex items-center justify-center text-white shadow-lg">
+                        <i class="fa-solid ${user.role === 'admin' ? 'fa-user-shield' : 'fa-user'} text-lg"></i>
+                    </div>
+                    <div class="text-left">
+                        <p class="text-[9px] font-black text-indigo-500 uppercase leading-none">${user.role}</p>
+                        <p class="text-sm font-bold text-gray-800">${user.name}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function fetchBookings(user) {
+            const container = document.getElementById('bookings-container');
+            const titleEl = document.getElementById('page-title');
+            const subtitleEl = document.getElementById('page-subtitle');
+
+            if (user.role === 'admin') {
+                titleEl.innerText = "Global History";
+                subtitleEl.innerText = "History of all processed student applications";
+            }
+
+            try {
+                const endpoint = (user.role === 'admin') ? '/api/admin/bookings' : `/api/bookings/user/${user.id}`;
+                const response = await fetch(endpoint);
+                let data = await response.json();
+                
+                if (user.role === 'admin') {
+                    data = data.filter(b => b.status !== 'Pending');
+                } else {
+                    const activeStays = data.filter(b => b.status === 'Approved');
+                    checkDueAlerts(activeStays);
+                }
+
+                data.reverse();
+
+                if (data.length === 0) {
+                    container.innerHTML = `<div class="bg-white p-12 rounded-[2.5rem] border border-dashed border-gray-200 text-center text-gray-400 font-bold uppercase text-xs">No history found.</div>`;
+                    return;
+                }
+
+                container.innerHTML = data.map(book => {
+                    const status = book.status || 'Pending';
+                    const statusStyle = status === 'Approved' ? "bg-green-100 text-green-700" : (status === 'Rejected' ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700");
+                    return `
+                        <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between transition hover:shadow-md">
+                            <div class="flex items-center gap-5">
+                                <div class="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-indigo-600">
+                                    <i class="fa-solid ${user.role === 'admin' ? 'fa-user-graduate' : 'fa-bed'}"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-black text-lg text-gray-800 uppercase tracking-tight">${user.role === 'admin' ? book.user_name : book.room_name}</h3>
+                                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                        ${book.duration} ${Number(book.duration) === 1 ? 'Month' : 'Months'} • ${book.start_date}
+                                    </p>
+                                </div>
+                            </div>
+                            <span class="${statusStyle} px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest">${status}</span>
+                        </div>`;
+                }).join('');
+            } catch (err) {
+                container.innerHTML = `<p class="text-center py-10 text-red-400 font-bold uppercase text-[10px]">Failed to load history.</p>`;
+            }
+        }
+
+        function markBadgeAsViewed() {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            if (!user.id) return;
+            fetch(`/api/users/${user.id}/notif-badge-viewed`, { method: 'PATCH' })
+                .catch(err => console.warn('Could not update badge viewed status:', err));
+        }
+
+        async function isBadgeViewed() {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            if (!user.id) return false;
+            try {
+                const res = await fetch(`/api/users/${user.id}/notif-badge-status?t=${Date.now()}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    return data.viewed;
+                }
+            } catch (err) {
+                console.warn('Could not check badge status:', err);
+            }
+            return false;
+        }
+
+        function dismissAlert(roomName) {
+            const dismissedRooms = JSON.parse(localStorage.getItem('dismissed-alert-rooms') || '[]');
+            if (!dismissedRooms.includes(roomName)) {
+                dismissedRooms.push(roomName);
+                localStorage.setItem('dismissed-alert-rooms', JSON.stringify(dismissedRooms));
+            }
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const userBookingsRes = JSON.parse(sessionStorage.getItem('userBookings') || '[]');
+            checkDueAlerts(userBookingsRes);
+        }
+
+        function checkDueAlerts(myActiveRooms) {
+            const notifItems = document.getElementById('notif-items');
+            const notifBadge = document.getElementById('notif-badge');
+            if (!notifItems || !notifBadge) return;
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            let alerts = [];
+            const dismissedRooms = JSON.parse(localStorage.getItem('dismissed-alert-rooms') || '[]');
+
+            myActiveRooms.forEach(room => {
+                const moveInDate = new Date(room.start_date);
+                const dueDate = new Date(moveInDate);
+                dueDate.setMonth(moveInDate.getMonth() + 1);
+                dueDate.setHours(0, 0, 0, 0);
+
+                const timeDiff = dueDate - today;
+                const daysLeft = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+
+                // Notify if 5 days or less, matching Index/MyStay logic
+                if (daysLeft <= 5 && !dismissedRooms.includes(room.room_name)) {
+                    const isUrgent = daysLeft <= 0;
+                    const statusText = daysLeft === 0 ? 'due today' : (daysLeft < 0 ? 'overdue' : 'due in ' + daysLeft + ' days');
+                    
+                    alerts.push({
+                        title: isUrgent ? 'Action Required' : 'Payment Upcoming',
+                        text: `Rent for ${room.room_name} is ${statusText}.`,
+                        color: isUrgent ? 'red' : 'amber',
+                        room_name: room.room_name
+                    });
+                }
+            });
+
+            (async () => {
+                const badgeViewed = await isBadgeViewed();
+                if (alerts.length > 0 && !badgeViewed) {
+                    notifBadge.classList.remove('hidden');
+                    notifItems.innerHTML = alerts.map(a => `
+                        <div class="p-4 rounded-2xl bg-${a.color}-50 border border-${a.color}-100 flex justify-between items-start gap-3">
+                            <div class="flex-1">
+                                <p class="text-[10px] font-black uppercase text-${a.color}-600 tracking-widest mb-1">
+                                    ${a.title}
+                                </p>
+                                <p class="text-[11px] font-bold text-gray-800 leading-tight">
+                                    ${a.text}
+                                </p>
+                            </div>
+                            <button onclick="dismissAlert('${a.room_name}')" class="flex-shrink-0 text-${a.color}-400 hover:text-${a.color}-600 transition">
+                                <i class="fa-solid fa-times text-sm"></i>
+                            </button>
+                        </div>
+                    `).join('');
+                } else {
+                    notifBadge.classList.add('hidden');
+                    notifItems.innerHTML = alerts.length > 0 
+                        ? alerts.map(a => `
+                            <div class="p-4 rounded-2xl bg-${a.color}-50 border border-${a.color}-100 flex justify-between items-start gap-3">
+                                <div class="flex-1">
+                                    <p class="text-[10px] font-black uppercase text-${a.color}-600 tracking-widest mb-1">
+                                        ${a.title}
+                                    </p>
+                                    <p class="text-[11px] font-bold text-gray-800 leading-tight">
+                                        ${a.text}
+                                    </p>
+                                </div>
+                                <button onclick="dismissAlert('${a.room_name}')" class="flex-shrink-0 text-${a.color}-400 hover:text-${a.color}-600 transition">
+                                    <i class="fa-solid fa-times text-sm"></i>
+                                </button>
+                            </div>
+                        `).join('')
+                        : `<div class="p-10 text-center opacity-30 text-[10px] font-black uppercase italic">No new alerts</div>`;
+                }
+            })();
+        }
+
+        function toggleSidebar() {
+            document.getElementById('sidebar-drawer').classList.toggle('translate-x-full');
+            document.getElementById('sidebar-overlay').classList.toggle('active');
+        }
+
+        function toggleDropdown(e, id) {
+            e.stopPropagation();
+            const menus = document.querySelectorAll('.dropdown-menu');
+            const target = document.getElementById(id);
+            menus.forEach(m => { if(m !== target) m.classList.remove('show'); });
+            target.classList.toggle('show');
+            // Mark badge as viewed and dismiss when notification dropdown opens
+            if (id === 'notif-dropdown' && target.classList.contains('show')) {
+                markBadgeAsViewed();
+                const badge = document.getElementById('notif-badge');
+                if (badge) badge.classList.add('hidden');
+            }
+        }
+
+        window.onclick = () => {
+            document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.add('hidden'));
+        };
+        function logout() { localStorage.removeItem('user'); window.location.href = 'auth.html'; }
+
+        function openAccountSelectorFromList(idx) {
+            const switchUsers = window.__switchUsers || JSON.parse(localStorage.getItem('savedUsers') || '[]');
+            const selected = switchUsers[idx];
+            if (!selected) return;
+
+            fetch(`/api/users/${selected.id}/last_login`, { method: 'PATCH' })
+                .catch(() => console.warn('Could not update last_login in DB'))
+                .finally(() => {
+                    localStorage.setItem('user', JSON.stringify(selected));
+                    const destination = (selected.role === 'admin') ? 'admin_panel.html' : 'index.html';
+                    window.location.href = destination;
+                });
+        }
+
+        async function loadSwitchAccounts() {
+            const menu = document.getElementById('switch-account-menu');
+            if (!menu) return;
+
+            let savedUsers = [];
+            try {
+                const usersRes = await fetch('/api/users?t=' + Date.now());
+                if (usersRes.ok) savedUsers = await usersRes.json();
+            } catch (err) {
+                console.warn('Failed to load users from DB, falling back to localStorage', err);
+            }
+
+            if (savedUsers.length === 0) {
+                savedUsers = JSON.parse(localStorage.getItem('savedUsers') || '[]');
+            }
+
+            if (savedUsers.length === 0) {
+                menu.innerHTML = `<div class="px-3 py-2 text-xs text-gray-500">No saved users. <a href="auth.html" class="text-indigo-600 underline">Login/Register</a></div>`;
+                return;
+            }
+
+            window.__switchUsers = savedUsers;
+            menu.innerHTML = `<div class="flex flex-col space-y-1">
+                ${savedUsers.map((u, idx) => {
+                    const label = `${u.name || u.email || 'User'} (${u.role || 'user'})`;
+                    return `<button onclick="openAccountSelectorFromList(${idx})" class="w-full text-left px-3 py-2 text-xs font-black text-gray-700 hover:bg-gray-100 rounded-xl">${label}</button>`;
+                }).join('')}
+            </div>`;
+        }
+
+        function toggleSwitchAccountMenu(e) {
+            e.stopPropagation();
+            const menu = document.getElementById('switch-account-menu');
+            if (!menu) {
+                console.error('Menu element not found');
+                return;
+            }
+            const isHidden = menu.classList.contains('hidden');
+            if (isHidden) {
+                menu.classList.remove('hidden');
+                loadSwitchAccounts();
+            } else {
+                menu.classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>

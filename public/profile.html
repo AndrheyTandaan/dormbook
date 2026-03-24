@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Profile | DormBook</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+
+        img {
+        border-radius: 50%;
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7) !important;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+        }
+
+        .dropdown-menu {
+            display: none;
+            transform-origin: top;
+            animation: slideIn 0.2s ease-out;
+        }
+        .dropdown-menu.show { display: block; }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        #sidebar-drawer {
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        #sidebar-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 transition-colors duration-500">
+
+    <nav class="fixed top-0 left-0 right-0 flex justify-between items-center px-8 py-4 bg-white/80 backdrop-blur-md border-b z-50 min-h-16">
+        <div class="text-xl font-bold flex items-center gap-2 cursor-pointer" onclick="window.location.href='index.html'">
+            <i class="fa-solid fa-building-circle-check text-indigo-600"></i>
+            DormBook
+        </div>
+
+        <div id="nav-center" class="absolute left-1/2 transform -translate-x-1/2 hidden md:flex gap-8 items-center justify-center"></div>
+
+        <div id="nav-right" class="flex justify-end items-center gap-4"></div>
+    </nav>
+
+    <div class="pt-20"></div>
+
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] opacity-0 pointer-events-none transition-opacity duration-300"></div>
+
+    <div id="sidebar-drawer" class="fixed top-0 right-0 h-full w-80 bg-white z-[70] shadow-2xl transform translate-x-full p-8 flex flex-col overflow-hidden">
+        <div class="flex justify-between items-center mb-8">
+            <span class="text-[10px] font-black uppercase text-gray-400 tracking-widest">Account</span>
+            <div class="flex gap-2">
+                <button type="button" id="switch-account-icon-btn" onclick="toggleSwitchAccountMenu(event)" class="w-12 h-12 flex items-center justify-center bg-gray-100 rounded-2xl border hover:bg-gray-200 transition cursor-pointer" title="Switch Account">
+                    <i class="fa-solid fa-arrow-right-arrow-left text-gray-600"></i>
+                </button>
+                <button onclick="toggleSidebar()" class="w-12 h-12 flex flex-col items-center justify-center bg-gray-100 rounded-2xl border hover:bg-gray-200 transition">
+                    <i class="fa-solid fa-xmark text-gray-500"></i>
+                </button>
+            </div>
+        </div>
+        <div id="switch-account-menu" class="dropdown-menu hidden w-full bg-white rounded-2xl shadow-lg border border-gray-200 p-2 mb-4 overflow-y-auto max-h-40"></div>
+        <div id="sidebar-profile-box" class="mb-10"></div>
+        <div id="sidebar-links" class="space-y-2 flex-grow overflow-y-auto pr-2"></div>
+        <button onclick="logout()" class="w-full bg-red-50 text-red-600 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-100 transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-right-from-bracket"></i> Logout
+        </button>
+    </div>
+
+    <div class="max-w-4xl mx-auto px-8 py-10">
+        <div class="mb-8">
+            <h1 class="text-4xl font-black mb-2 tracking-tight uppercase">Edit Profile</h1>
+            <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Update your account information</p>
+        </div>
+
+        <input type="file" id="file input"/>
+        <img id="preview" src="" alt="Image Preview" style="display:none; max-width:200px; margin-top:10px;"/>
+        <button id="upload-btn">Upload Image</button>
+        <button id="crop">Crop Image</button>
+
+        <div class="glass-card p-8 rounded-[3rem] mb-8">
+            <form id="profile-form" class="space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="space-y-1">
+                        <label class="block text-[10px] font-black uppercase text-gray-400 mb-1 ml-1 tracking-widest">Full Name</label>
+                        <input type="text" id="name-input" name="name" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm" required>
+                    </div>
+
+                    <div class="space-y-1">
+                        <label class="block text-[10px] font-black uppercase text-gray-400 mb-1 ml-1 tracking-widest">Email Address</label>
+                        <input type="email" id="email-input" name="email" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm" required>
+                    </div>
+                </div>
+
+                <div id="password-section" class="space-y-4">
+                    <h3 class="text-lg font-bold text-gray-800">Change Password (Optional)</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-1">
+                            <label class="block text-[10px] font-black uppercase text-gray-400 mb-1 ml-1 tracking-widest">Current Password</label>
+                            <input type="password" id="current-password" name="currentPassword" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm">
+                        </div>
+
+                        <div class="space-y-1">
+                            <label class="block text-[10px] font-black uppercase text-gray-400 mb-1 ml-1 tracking-widest">New Password</label>
+                            <input type="password" id="new-password" name="newPassword" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex gap-4 pt-6">
+                    <button type="button" onclick="window.history.back()" class="flex-1 bg-gray-100 text-gray-500 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 transition">
+                        Cancel
+                    </button>
+                    <button type="submit" id="save-btn" class="flex-1 bg-indigo-600 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition shadow-lg shadow-indigo-200">
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="navbar.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            updateNavbar();
+            loadUserProfile();
+        });
+
+        async function loadUserProfile() {
+            const user = JSON.parse(localStorage.getItem('user'));
+            if (!user) {
+                window.location.href = 'auth.html';
+                return;
+            }
+
+            // Load current user data
+            try {
+                const res = await fetch(`/api/users/${user.id}`);
+                if (res.ok) {
+                    const userData = await res.json();
+                    document.getElementById('name-input').value = userData.name;
+                    document.getElementById('email-input').value = userData.email;
+                }
+            } catch (err) {
+                console.error('Failed to load user profile:', err);
+            }
+
+            // Hide password section for Google users (they don't have passwords)
+            if (user.google_id) {
+                document.getElementById('password-section').style.display = 'none';
+            }
+        }
+
+        document.getElementById('profile-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const saveBtn = document.getElementById('save-btn');
+            const originalText = saveBtn.innerText;
+            saveBtn.disabled = true;
+            saveBtn.innerText = 'Saving...';
+
+            const user = JSON.parse(localStorage.getItem('user'));
+            const formData = new FormData(e.target);
+
+            const updateData = {
+                name: formData.get('name'),
+                email: formData.get('email')
+            };
+
+            // Only include password change if provided
+            const currentPassword = formData.get('currentPassword');
+            const newPassword = formData.get('newPassword');
+
+            if (currentPassword && newPassword) {
+                updateData.currentPassword = currentPassword;
+                updateData.newPassword = newPassword;
+            }
+
+            try {
+                const res = await fetch(`/api/users/${user.id}/profile`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updateData)
+                });
+
+                const result = await res.json();
+
+                if (res.ok) {
+                    // Update localStorage with new data
+                    const updatedUser = { ...user, name: updateData.name, email: updateData.email };
+                    localStorage.setItem('user', JSON.stringify(updatedUser));
+
+                    alert('Profile updated successfully!');
+                    window.location.href = 'index.html';
+                } else {
+                    alert(result.error || 'Failed to update profile');
+                }
+            } catch (err) {
+                console.error('Profile update error:', err);
+                alert('Connection error. Please try again.');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.innerText = originalText;
+            }
+        });
+    </script>
+</body>
+</html>
