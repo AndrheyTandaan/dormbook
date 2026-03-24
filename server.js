@@ -642,7 +642,7 @@ app.get('/api/admin/logs', async (req, res) => {
 // --- BOOKING ROUTES ---
 app.get('/api/admin/bookings', async (req, res) => {
     try {
-        const bookingsSnapshot = await db.collection('bookings').orderBy('created_at', 'desc').get();
+        const bookingsSnapshot = await db.collection('bookings').get();
         const bookings = [];
 
         for (const bookingDoc of bookingsSnapshot.docs) {
@@ -677,6 +677,9 @@ app.get('/api/admin/bookings', async (req, res) => {
                 price: price
             });
         }
+
+        // Sort by created_at descending (newest first)
+        bookings.sort((a, b) => (b.created_at?._seconds || 0) - (a.created_at?._seconds || 0));
 
         res.json(bookings);
     } catch (error) {
@@ -713,12 +716,11 @@ app.get('/api/bookings/user/:userId', async (req, res) => {
     try {
         const bookingsSnapshot = await db.collection('bookings')
             .where('user_id', '==', req.params.userId)
-            .orderBy('created_at', 'desc')
             .get();
         const bookings = bookingsSnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
-        }));
+        })).sort((a, b) => (b.created_at?._seconds || 0) - (a.created_at?._seconds || 0));
         res.json(bookings || []);
     } catch (error) {
         res.status(500).json({ error: error.message });
