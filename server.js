@@ -642,6 +642,7 @@ app.get('/api/admin/logs', async (req, res) => {
 // --- BOOKING ROUTES ---
 app.get('/api/admin/bookings', async (req, res) => {
     try {
+        console.log('Fetching all bookings...');
         const bookingsSnapshot = await db.collection('bookings').get();
         const bookings = [];
 
@@ -714,6 +715,7 @@ app.post('/api/book', upload.single('receipt'), async (req, res) => {
 
 app.get('/api/bookings/user/:userId', async (req, res) => {
     try {
+        console.log(`Fetching bookings for user: ${req.params.userId}`);
         const bookingsSnapshot = await db.collection('bookings')
             .where('user_id', '==', req.params.userId)
             .get();
@@ -721,8 +723,10 @@ app.get('/api/bookings/user/:userId', async (req, res) => {
             id: doc.id,
             ...doc.data()
         })).sort((a, b) => (b.created_at?._seconds || 0) - (a.created_at?._seconds || 0));
+        console.log(`Found ${bookings.length} bookings for user`);
         res.json(bookings || []);
     } catch (error) {
+        console.error('Error fetching user bookings:', error);
         res.status(500).json({ error: error.message });
     }
 });
