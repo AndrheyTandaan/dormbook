@@ -1,5 +1,4 @@
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
 const bodyParser = require('body-parser');
 const bcrypt = require('bcrypt');
 const path = require('path');
@@ -12,15 +11,45 @@ const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 
-const app = express();
-const dbPath = path.join(__dirname, 'db', 'dormbook.db');
-console.log('Using SQLite DB file:', dbPath);
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error('Failed to open SQLite DB:', err.message);
-        process.exit(1);
-    }
+const admin = require("firebase-admin");
+const serviceAccount = require("./serviceAccountKey.json");
+
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
 });
+
+const db = admin.firestore();
+
+// --- FIRESTORE INITIALIZATION ---
+async function initializeFirestore() {
+    try {
+        // Seed admin user if not exists
+        const adminRef = db.collection('users').doc('admin@dormbook.com');
+        const adminDoc = await adminRef.get();
+
+        if (!adminDoc.exists) {
+            const hashedPass = await bcrypt.hash('09303981864', 10);
+            await adminRef.set({
+                id: 'admin@dormbook.com', // Using email as ID for simplicity
+                name: 'System Admin',
+                email: 'admin@dormbook.com',
+                password: hashedPass,
+                role: 'admin',
+                profile_image: null,
+                google_id: null,
+                created_at: admin.firestore.FieldValue.serverTimestamp(),
+                last_login: admin.firestore.FieldValue.serverTimestamp(),
+                notif_badge_viewed_at: null
+            });
+            console.log('✅ Master Admin Seeded: admin@dormbook.com');
+        }
+    } catch (error) {
+        console.error('Error initializing Firestore:', error);
+    }
+}
+
+// Initialize Firestore data
+initializeFirestore();
 
 // --- MULTER CONFIGURATION ---
 const storage = multer.diskStorage({
@@ -65,94 +94,7 @@ const uploadProfile = multer({
     }
 });
 
-// --- DATABASE INITIALIZATION & ADMIN SEEDING ---
-db.serialize(async () => {
-    // 1. Create Users Table
-    db.run(`CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        email TEXT UNIQUE,
-        password TEXT,
-        role TEXT DEFAULT 'student',
-        profile_image TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        last_login DATETIME DEFAULT CURRENT_TIMESTAMP,
-        notif_badge_viewed_at DATETIME
-    )`);
-
-    // Ensure google_id column exists
-    db.run(`ALTER TABLE users ADD COLUMN google_id TEXT`, (err) => {
-        if (err && !/duplicate column/i.test(err.message)) {
-            console.warn('Could not add google_id column:', err.message);
-        }
-    });
-
-    // Ensure profile_image column exists
-    db.run(`ALTER TABLE users ADD COLUMN profile_image TEXT`, (err) => {
-        if (err && !/duplicate column/i.test(err.message)) {
-            console.warn('Could not add profile_image column:', err.message);
-        }
-    });
-
-    // Ensure last_login column exists even when table created before this change
-    db.run(`ALTER TABLE users ADD COLUMN last_login DATETIME`, (err) => {
-        if (err && !/duplicate column/i.test(err.message)) {
-            console.warn('Could not add last_login column:', err.message);
-        }
-    });
-
-    // Ensure notif_badge_viewed_at column exists for notification badge tracking
-    db.run(`ALTER TABLE users ADD COLUMN notif_badge_viewed_at DATETIME`, (err) => {
-        if (err && !/duplicate column/i.test(err.message)) {
-            console.warn('Could not add notif_badge_viewed_at column:', err.message);
-        }
-    });
-
-    // 2. SEED MASTER ADMIN ACCOUNT
-    const adminEmail = 'admin@dormbook.com';
-    const adminPass = '09303981864';
-    
-    db.get(`SELECT * FROM users WHERE email = ?`, [adminEmail], async (err, row) => {
-        if (!row) {
-            const hashedPass = await bcrypt.hash(adminPass, 10);
-            db.run(`INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)`,
-                ['System Admin', adminEmail, hashedPass, 'admin'], (err) => {
-                    if (!err) console.log(`✅ Master Admin Seeded: ${adminEmail}`);
-                });
-        }
-    });
-
-    // UPDATED: Added room_type column
-    db.run(`CREATE TABLE IF NOT EXISTS dorms (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        price TEXT,
-        description TEXT,
-        image_url TEXT,
-        room_type TEXT
-    )`);
-
-    db.run(`CREATE TABLE IF NOT EXISTS bookings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        room_name TEXT,
-        start_date TEXT,
-        duration TEXT,
-        special_request TEXT,
-        receipt_url TEXT,
-        amount_paid REAL DEFAULT 0,
-        status TEXT DEFAULT 'Pending',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-
-    db.run(`CREATE TABLE IF NOT EXISTS action_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        admin_name TEXT,
-        action_details TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-});
-
+// --- EXPRESS SETUP ---
 app.use(cors());
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
@@ -173,10 +115,17 @@ passport.serializeUser((user, done) => {
     done(null, user.id);
 });
 
-passport.deserializeUser((id, done) => {
-    db.get(`SELECT * FROM users WHERE id = ?`, [id], (err, row) => {
-        done(err, row);
-    });
+passport.deserializeUser(async (id, done) => {
+    try {
+        const userDoc = await db.collection('users').doc(id).get();
+        if (userDoc.exists) {
+            done(null, { id: userDoc.id, ...userDoc.data() });
+        } else {
+            done(null, null);
+        }
+    } catch (error) {
+        done(error, null);
+    }
 });
 
 // Google OAuth Strategy
@@ -184,59 +133,130 @@ passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     callbackURL: '/auth/google/callback'
-}, (accessToken, refreshToken, profile, done) => {
+}, async (accessToken, refreshToken, profile, done) => {
     const googleId = profile.id;
     const email = profile.emails[0].value;
     const name = profile.displayName;
 
-    db.get(`SELECT * FROM users WHERE google_id = ? OR email = ?`, [googleId, email], (err, row) => {
-        if (err) return done(err);
-        if (row) {
-            // Update google_id if not set
-            if (!row.google_id) {
-                db.run(`UPDATE users SET google_id = ? WHERE id = ?`, [googleId, row.id]);
+    try {
+        // Check if user exists by google_id or email
+        const usersRef = db.collection('users');
+        const querySnapshot = await usersRef.where('google_id', '==', googleId).get();
+
+        let userDoc;
+        if (!querySnapshot.empty) {
+            userDoc = querySnapshot.docs[0];
+        } else {
+            // Check by email
+            const emailQuery = await usersRef.where('email', '==', email).get();
+            if (!emailQuery.empty) {
+                userDoc = emailQuery.docs[0];
+                // Update google_id if not set
+                await userDoc.ref.update({ google_id: googleId });
             }
-            return done(null, row);
+        }
+
+        if (userDoc) {
+            return done(null, { id: userDoc.id, ...userDoc.data() });
         } else {
             // Create new user
-            db.run(`INSERT INTO users (name, email, google_id, role) VALUES (?, ?, ?, 'student')`,
-                [name, email, googleId], function(err) {
-                    if (err) return done(err);
-                    db.get(`SELECT * FROM users WHERE id = ?`, [this.lastID], (err, newRow) => {
-                        done(err, newRow);
-                    });
-                });
+            const newUserRef = usersRef.doc(email); // Use email as document ID
+            await newUserRef.set({
+                id: email,
+                name: name,
+                email: email,
+                google_id: googleId,
+                role: 'student',
+                profile_image: null,
+                created_at: admin.firestore.FieldValue.serverTimestamp(),
+                last_login: admin.firestore.FieldValue.serverTimestamp(),
+                notif_badge_viewed_at: null
+            });
+
+            const newUserDoc = await newUserRef.get();
+            return done(null, { id: newUserDoc.id, ...newUserDoc.data() });
         }
-    });
+    } catch (error) {
+        return done(error, null);
+    }
 }));
 
 // --- LOGGING HELPER FUNCTION ---
-function logAction(adminName, details) {
-    db.run(`INSERT INTO action_logs (admin_name, action_details) VALUES (?, ?)`, [adminName || 'Admin', details]);
+async function logAction(adminName, details) {
+    try {
+        await db.collection('action_logs').add({
+            admin_name: adminName || 'Admin',
+            action_details: details,
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+    } catch (error) {
+        console.error('Error logging action:', error);
+    }
 }
 
 // --- AUTH ROUTES ---
 app.post('/api/register', async (req, res) => {
     const { name, email, password } = req.body;
     try {
+        // Check if user already exists
+        const existingUser = await db.collection('users').where('email', '==', email).get();
+        if (!existingUser.empty) {
+            return res.status(400).json({ error: "Email already exists" });
+        }
+
         const hashedPassword = await bcrypt.hash(password, 10);
-        db.run(`INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, 'student')`,
-            [name, email, hashedPassword], function(err) {
-                if (err) return res.status(400).json({ error: "Email already exists" });
-                res.json({ success: true, user: { id: this.lastID, name, role: 'student' } });
-            });
-    } catch (err) { res.status(500).json({ error: "Server error" }); }
+        const userRef = db.collection('users').doc(email);
+        await userRef.set({
+            id: email,
+            name: name,
+            email: email,
+            password: hashedPassword,
+            role: 'student',
+            profile_image: null,
+            google_id: null,
+            created_at: admin.firestore.FieldValue.serverTimestamp(),
+            last_login: admin.firestore.FieldValue.serverTimestamp(),
+            notif_badge_viewed_at: null
+        });
+
+        res.json({ success: true, user: { id: email, name, role: 'student' } });
+    } catch (err) {
+        console.error('Registration error:', err);
+        res.status(500).json({ error: "Server error" });
+    }
 });
 
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
     const { email, password } = req.body;
-    db.get(`SELECT * FROM users WHERE email = ?`, [email], async (err, row) => {
-        if (err || !row || !(await bcrypt.compare(password, row.password))) {
+    try {
+        const userQuery = await db.collection('users').where('email', '==', email).get();
+        if (userQuery.empty) {
             return res.status(400).json({ error: 'Invalid email or password' });
         }
-        db.run(`UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?`, [row.id]);
-        res.json({ success: true, user: { id: row.id, name: row.name, role: row.role } });
-    });
+
+        const userDoc = userQuery.docs[0];
+        const userData = userDoc.data();
+
+        // Check password (skip for Google users)
+        if (userData.google_id) {
+            return res.status(400).json({ error: 'Please use Google login for this account' });
+        }
+
+        const isValidPassword = await bcrypt.compare(password, userData.password);
+        if (!isValidPassword) {
+            return res.status(400).json({ error: 'Invalid email or password' });
+        }
+
+        // Update last_login
+        await userDoc.ref.update({
+            last_login: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        res.json({ success: true, user: { id: userDoc.id, name: userData.name, role: userData.role } });
+    } catch (err) {
+        console.error('Login error:', err);
+        res.status(500).json({ error: "Server error" });
+    }
 });
 
 // Google Auth Routes
@@ -246,11 +266,18 @@ app.get('/auth/google',
 
 app.get('/auth/google/callback',
     passport.authenticate('google', { failureRedirect: '/auth.html' }),
-    (req, res) => {
-        // Update last_login
-        db.run(`UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?`, [req.user.id]);
-        // Redirect to dashboard
-        res.redirect('/index.html');
+    async (req, res) => {
+        try {
+            // Update last_login
+            await db.collection('users').doc(req.user.id).update({
+                last_login: admin.firestore.FieldValue.serverTimestamp()
+            });
+            // Redirect to dashboard
+            res.redirect('/index.html');
+        } catch (error) {
+            console.error('Google callback error:', error);
+            res.redirect('/auth.html');
+        }
     }
 );
 
@@ -266,27 +293,25 @@ app.put('/api/users/:id/profile', async (req, res) => {
 
     try {
         // Get current user data
-        const user = await new Promise((resolve, reject) => {
-            db.get(`SELECT * FROM users WHERE id = ?`, [id], (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
-        });
+        const userDoc = await db.collection('users').doc(id).get();
+        if (!userDoc.exists) {
+            return res.status(404).json({ error: 'User not found' });
+        }
 
-        if (!user) return res.status(404).json({ error: 'User not found' });
+        const userData = userDoc.data();
 
         // Check if email is already taken by another user
-        const existingUser = await new Promise((resolve, reject) => {
-            db.get(`SELECT id FROM users WHERE email = ? AND id != ?`, [email, id], (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
-        });
+        if (email !== userData.email) {
+            const emailQuery = await db.collection('users').where('email', '==', email).get();
+            if (!emailQuery.empty) {
+                return res.status(400).json({ error: 'Email already in use' });
+            }
+        }
 
-        if (existingUser) return res.status(400).json({ error: 'Email already in use' });
-
-        let updateFields = ['name = ?', 'email = ?'];
-        let updateValues = [name, email];
+        const updateData = {
+            name: name,
+            email: email
+        };
 
         // Handle password change if provided
         if (newPassword) {
@@ -295,31 +320,23 @@ app.put('/api/users/:id/profile', async (req, res) => {
             }
 
             // For Google users, they don't have passwords
-            if (user.google_id) {
+            if (userData.google_id) {
                 return res.status(400).json({ error: 'Cannot change password for Google accounts' });
             }
 
             // Verify current password
-            const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+            const isValidPassword = await bcrypt.compare(currentPassword, userData.password);
             if (!isValidPassword) {
                 return res.status(400).json({ error: 'Current password is incorrect' });
             }
 
             // Hash new password
             const hashedPassword = await bcrypt.hash(newPassword, 10);
-            updateFields.push('password = ?');
-            updateValues.push(hashedPassword);
+            updateData.password = hashedPassword;
         }
 
-        updateValues.push(id);
-
         // Update user
-        await new Promise((resolve, reject) => {
-            db.run(`UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`, updateValues, function(err) {
-                if (err) reject(err);
-                else resolve(this);
-            });
-        });
+        await userDoc.ref.update(updateData);
 
         res.json({ success: true, message: 'Profile updated successfully' });
     } catch (err) {
