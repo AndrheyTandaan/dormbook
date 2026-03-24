@@ -132,10 +132,17 @@ const io = new Server(server, {
 });
 
 app.use(cors());
-app.use(bodyParser.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+
+// --- REQUEST LOGGER MIDDLEWARE ---
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+});
+
+// --- STATIC FILES (AFTER API ROUTES WILL BE DEFINED) ---
+// We'll move this AFTER all API routes are defined
 
 // --- SOCKET.IO SETUP ---
 io.on('connection', (socket) => {
@@ -350,6 +357,15 @@ app.get('/auth/logout', (req, res) => {
     req.logout(() => {
         res.redirect('/auth.html');
     });
+});
+
+// Get current session user (for checking if user is logged in via Google/Passport)
+app.get('/api/session-user', (req, res) => {
+    if (req.user) {
+        res.json({ user: { id: req.user.id, name: req.user.name, role: req.user.role } });
+    } else {
+        res.json({ user: null });
+    }
 });
 
 app.put('/api/users/:id/profile', async (req, res) => {
@@ -714,8 +730,14 @@ app.patch('/api/bookings/:id/status', async (req, res) => {
         const { status, adminName } = req.body;
         const id = req.params.id;
 
+        if (!status) {
+            return res.status(400).json({ error: "Status is required" });
+        }
+
         const bookingDoc = await db.collection('bookings').doc(id).get();
-        if (!bookingDoc.exists) return res.status(404).json({ error: "Booking not found" });
+        if (!bookingDoc.exists) {
+            return res.status(404).json({ error: "Booking not found" });
+        }
 
         const bookingData = bookingDoc.data();
 
@@ -727,15 +749,16 @@ app.patch('/api/bookings/:id/status', async (req, res) => {
                 userName = userDoc.data().name;
             }
         } catch (error) {
-            console.error('Error fetching user for booking status update:', error);
+            console.error('Error fetching user:', error);
         }
 
         await db.collection('bookings').doc(id).update({ status });
         logAction(adminName, `Updated booking status for ${userName} (${bookingData.room_name}) to ${status}`);
 
-        res.json({ success: true });
+        return res.status(200).json({ success: true, message: 'Status updated' });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error('Booking status update error:', error);
+        return res.status(500).json({ error: error.message || 'Server error' });
     }
 });
 
@@ -745,7 +768,10 @@ app.delete('/api/bookings/:id', async (req, res) => {
         const adminName = req.query.adminName;
 
         const bookingDoc = await db.collection('bookings').doc(id).get();
-        if (!bookingDoc.exists) return res.status(404).json({ error: "Booking not found" });
+        if (!bookingDoc.exists) {
+            res.setHeader('Content-Type', 'application/json');
+            return res.status(404).json({ error: "Booking not found" });
+        }
 
         const bookingData = bookingDoc.data();
 
@@ -763,14 +789,22 @@ app.delete('/api/bookings/:id', async (req, res) => {
         await db.collection('bookings').doc(id).delete();
         const logMsg = `Deleted booking: ${studentName} for ${bookingData.room_name}`;
         logAction(adminName, logMsg);
+        res.setHeader('Content-Type', 'application/json');
         res.json({ success: true });
     } catch (error) {
+        console.error('Booking deletion error:', error);
+        res.setHeader('Content-Type', 'application/json');
         res.status(500).json({ error: error.message });
     }
 });
 
+// --- STATIC FILES MIDDLEWARE (AFTER ALL API ROUTES) ---
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+
 // --- CATCH-ALL ---
-app.get(/^/, (req, res) => {
+app.use((req, res) => {
+    console.log(`[CATCH-ALL] ${req.method} ${req.path} - Route not found`);
     const filePath = path.join(__dirname, 'public', req.path);
     if (fs.existsSync(filePath) && fs.lstatSync(filePath).isFile()) {
         // Set proper content type for HTML files

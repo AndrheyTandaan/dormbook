@@ -195,29 +195,56 @@ async function updateStatus(id, status) {
         const res = await fetch(`/api/bookings/${id}/status`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: status, adminName: getAdminName() })
+            body: JSON.stringify({ status, adminName: getAdminName() })
         });
-        if(res.ok) {
+        
+        if (res.ok) {
             closeReceiptModal();
             refreshAdminData();
+        } else {
+            const error = await res.json();
+            alert("Error: " + (error.error || "Failed to update status"));
         }
-    } catch (err) { console.error("Update error:", err); }
+    } catch (err) { 
+        console.error("Update error:", err);
+        alert("Error: " + err.message);
+    }
 }
 
 async function deleteBooking(id) {
     if(!confirm("Remove this booking record?")) return;
     try {
-        const res = await fetch(`/api/bookings/${id}?adminName=${getAdminName()}`, { method: 'DELETE' });
-        if (res.ok) refreshAdminData();
-    } catch (err) { console.error("Delete error:", err); }
+        const res = await fetch(`/api/bookings/${id}?adminName=${encodeURIComponent(getAdminName())}`, { 
+            method: 'DELETE' 
+        });
+        if (res.ok) {
+            refreshAdminData();
+        } else {
+            const error = await res.json();
+            alert("Error: " + (error.error || "Failed to delete booking"));
+        }
+    } catch (err) { 
+        console.error("Delete error:", err);
+        alert("Error: " + err.message);
+    }
 }
 
 async function deleteDorm(id) {
     if (!confirm("Delete this property? This will remove it from student search.")) return;
     try {
-        const res = await fetch(`/api/dorms/${id}?adminName=${getAdminName()}`, { method: 'DELETE' });
-        if (res.ok) refreshAdminData();
-    } catch (err) { console.error("Dorm delete error:", err); }
+        const res = await fetch(`/api/dorms/${id}?adminName=${encodeURIComponent(getAdminName())}`, { 
+            method: 'DELETE' 
+        });
+        if (res.ok) {
+            refreshAdminData();
+        } else {
+            const error = await res.json();
+            alert("Error: " + (error.error || "Failed to delete dorm"));
+        }
+    } catch (err) { 
+        console.error("Delete error:", err);
+        alert("Error: " + err.message);
+    }
 }
 
 function closeReceiptModal() { 
