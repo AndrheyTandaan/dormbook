@@ -3,7 +3,12 @@ const path = require('path');
 
 // This ensures we point to the file in the SAME folder as this script
 const dbPath = path.join(__dirname, 'dormbook.db');
-const db = new sqlite3.Database(dbPath);
+const db = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+        console.error('Failed to open SQLite DB in init_db.js:', err.message);
+        process.exit(1);
+    }
+});
 
 console.log("Opening database at:", dbPath);
 

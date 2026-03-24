@@ -13,7 +13,14 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 
 const app = express();
-const db = new sqlite3.Database('./db/dormbook.db');
+const dbPath = path.join(__dirname, 'db', 'dormbook.db');
+console.log('Using SQLite DB file:', dbPath);
+const db = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+        console.error('Failed to open SQLite DB:', err.message);
+        process.exit(1);
+    }
+});
 
 // --- MULTER CONFIGURATION ---
 const storage = multer.diskStorage({
