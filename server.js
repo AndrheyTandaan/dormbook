@@ -770,11 +770,16 @@ app.delete('/api/bookings/:id', async (req, res) => {
 });
 
 // --- CATCH-ALL ---
-app.get(/^/, (req, res) => {
+app.get('*', (req, res) => {
     const filePath = path.join(__dirname, 'public', req.path);
     if (fs.existsSync(filePath) && fs.lstatSync(filePath).isFile()) {
+        // Set proper content type for HTML files
+        if (filePath.endsWith('.html')) {
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        }
         res.sendFile(filePath);
     } else {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.sendFile(path.join(__dirname, 'public', 'index.html'));
     }
 });
