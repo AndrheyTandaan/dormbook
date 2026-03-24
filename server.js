@@ -691,7 +691,29 @@ app.get('/api/admin/bookings', async (req, res) => {
 app.post('/api/book', upload.single('receipt'), async (req, res) => {
     try {
         const { user_id, room_name, start_date, duration, special_request, amount_paid } = req.body;
-        const receipt_url = req.file ? `/uploads/receipts/${req.file.filename}` : null;
+        let receipt_url = null;
+
+        // Upload receipt to Firebase Storage if file exists
+        if (req.file) {
+            try {
+                const bucket = admin.storage().bucket();
+                const filename = `receipts/${Date.now()}_${req.file.originalname}`;
+                const file = bucket.file(filename);
+                
+                await file.save(req.file.buffer, {
+                    metadata: {
+                        contentType: req.file.mimetype
+                    }
+                });
+                
+                // Generate public download URL
+                receipt_url = `https://storage.googleapis.com/${bucket.name}/${filename}`;
+                console.log(`Receipt uploaded to Firebase Storage: ${receipt_url}`);
+            } catch (uploadErr) {
+                console.error('Error uploading receipt to Firebase Storage:', uploadErr);
+                // Continue without receipt if upload fails
+            }
+        }
 
         if (!user_id || !room_name) return res.status(400).json({ error: "Missing required booking data." });
 
