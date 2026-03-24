@@ -411,209 +411,362 @@ app.put('/api/users/:id/profile', async (req, res) => {
 });
 
 // --- USER MANAGEMENT ROUTES ---
-app.get('/api/admin/users', (req, res) => {
-    db.all(`SELECT id, name, email, role, created_at FROM users ORDER BY id DESC`, [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+app.get('/api/admin/users', async (req, res) => {
+    try {
+        const usersSnapshot = await db.collection('users').orderBy('created_at', 'desc').get();
+        const users = usersSnapshot.docs.map(doc => ({
+            id: doc.id,
+            name: doc.data().name,
+            email: doc.data().email,
+            role: doc.data().role,
+            created_at: doc.data().created_at
+        }));
+        res.json(users);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
-app.get('/api/users/:id', (req, res) => {
-    const { id } = req.params;
-    db.get(`SELECT id, name, email, role, created_at, last_login FROM users WHERE id = ?`, [id], (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!row) return res.status(404).json({ error: 'User not found' });
-        res.json(row);
-    });
+app.get('/api/users/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userDoc = await db.collection('users').doc(id).get();
+        if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+        const userData = userDoc.data();
+        res.json({
+            id: userDoc.id,
+            name: userData.name,
+            email: userData.email,
+            role: userData.role,
+            created_at: userData.created_at,
+            last_login: userData.last_login
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
-app.patch('/api/users/:id/last_login', (req, res) => {
-    const { id } = req.params;
-    db.run(`UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?`, [id], function(err) {
-        if (err) return res.status(500).json({ error: err.message });
-        if (this.changes === 0) return res.status(404).json({ error: 'User not found' });
+app.patch('/api/users/:id/last_login', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await db.collection('users').doc(id).update({
+            last_login: admin.firestore.FieldValue.serverTimestamp()
+        });
         res.json({ success: true });
-    });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
-app.patch('/api/users/:id/notif-badge-viewed', (req, res) => {
-    const { id } = req.params;
-    db.run(`UPDATE users SET notif_badge_viewed_at = CURRENT_TIMESTAMP WHERE id = ?`, [id], function(err) {
-        if (err) return res.status(500).json({ error: err.message });
-        if (this.changes === 0) return res.status(404).json({ error: 'User not found' });
+app.patch('/api/users/:id/notif-badge-viewed', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await db.collection('users').doc(id).update({
+            notif_badge_viewed_at: admin.firestore.FieldValue.serverTimestamp()
+        });
         res.json({ success: true, viewed_at: new Date().toISOString() });
-    });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
-app.get('/api/users/:id/notif-badge-status', (req, res) => {
-    const { id } = req.params;
-    db.get(`SELECT notif_badge_viewed_at FROM users WHERE id = ?`, [id], (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!row) return res.status(404).json({ error: 'User not found' });
-        res.json({ 
-            viewed: row.notif_badge_viewed_at !== null,
-            viewed_at: row.notif_badge_viewed_at 
+app.get('/api/users/:id/notif-badge-status', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userDoc = await db.collection('users').doc(id).get();
+        if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+        const userData = userDoc.data();
+        res.json({
+            viewed: userData.notif_badge_viewed_at !== null,
+            viewed_at: userData.notif_badge_viewed_at
         });
-    });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
-app.put('/api/admin/users/:id/role', (req, res) => {
-    const { id } = req.params;
-    const { role, adminName } = req.body;
-    db.get(`SELECT name FROM users WHERE id = ?`, [id], (err, row) => {
-        if (err || !row) return res.status(404).json({ error: "User not found" });
-        db.run(`UPDATE users SET role = ? WHERE id = ?`, [role, id], function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            logAction(adminName, `Changed role of ${row.name} to ${role}`);
-            res.json({ success: true });
-        });
-    });
+app.put('/api/admin/users/:id/role', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { role, adminName } = req.body;
+        const userDoc = await db.collection('users').doc(id).get();
+        if (!userDoc.exists) return res.status(404).json({ error: "User not found" });
+        const userData = userDoc.data();
+        await db.collection('users').doc(id).update({ role });
+        logAction(adminName, `Changed role of ${userData.name} to ${role}`);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
-app.delete('/api/admin/users/:id', (req, res) => {
-    const { id } = req.params;
-    const adminName = req.query.adminName;
-    db.get(`SELECT name FROM users WHERE id = ?`, [id], (err, row) => {
-        if (err || !row) return res.status(404).json({ error: "User not found" });
-        const userName = row.name;
-        db.run(`DELETE FROM users WHERE id = ?`, [id], function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            logAction(adminName, `Deleted user: ${userName}`);
-            res.json({ success: true });
-        });
-    });
+app.delete('/api/admin/users/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const adminName = req.query.adminName;
+        const userDoc = await db.collection('users').doc(id).get();
+        if (!userDoc.exists) return res.status(404).json({ error: "User not found" });
+        const userData = userDoc.data();
+        await db.collection('users').doc(id).delete();
+        logAction(adminName, `Deleted user: ${userData.name}`);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // --- DORM ROUTES ---
-app.get('/api/dorms', (req, res) => {
-    const query = `
-        SELECT dorms.*, 
-        (SELECT COUNT(*) FROM bookings WHERE bookings.room_name = dorms.name AND bookings.status = 'Approved') as is_occupied
-        FROM dorms
-    `;
-    db.all(query, [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+app.get('/api/dorms', async (req, res) => {
+    try {
+        // Get all dorms
+        const dormsSnapshot = await db.collection('dorms').get();
+        const dorms = [];
+
+        for (const dormDoc of dormsSnapshot.docs) {
+            const dormData = dormDoc.data();
+            // Check if dorm is occupied by counting approved bookings
+            const bookingsSnapshot = await db.collection('bookings')
+                .where('room_name', '==', dormData.name)
+                .where('status', '==', 'Approved')
+                .get();
+
+            dorms.push({
+                id: dormDoc.id,
+                ...dormData,
+                is_occupied: !bookingsSnapshot.empty
+            });
+        }
+
+        res.json(dorms);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
-app.get('/api/rooms', (req, res) => {
-    db.all(`SELECT * FROM dorms`, [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+app.get('/api/rooms', async (req, res) => {
+    try {
+        const dormsSnapshot = await db.collection('dorms').get();
+        const dorms = dormsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+        res.json(dorms);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // UPDATED: Added room_type to INSERT
-app.post('/api/dorms', (req, res) => {
-    const { name, price, description, image_url, room_type, adminName } = req.body;
-    db.run(`INSERT INTO dorms (name, price, description, image_url, room_type) VALUES (?, ?, ?, ?, ?)`,
-        [name, price, description, image_url, room_type], function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            logAction(adminName, `Added new dorm: ${name} (${room_type})`);
-            res.json({ success: true, id: this.lastID });
+app.post('/api/dorms', async (req, res) => {
+    try {
+        const { name, price, description, image_url, room_type, adminName } = req.body;
+        const dormRef = await db.collection('dorms').add({
+            name,
+            price: parseFloat(price),
+            description,
+            image_url,
+            room_type,
+            created_at: admin.firestore.FieldValue.serverTimestamp()
         });
+        logAction(adminName, `Added new dorm: ${name} (${room_type})`);
+        res.json({ success: true, id: dormRef.id });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // UPDATED: Added room_type to UPDATE
-app.put('/api/dorms/:id', (req, res) => {
-    const { name, price, description, image_url, room_type, adminName } = req.body;
-    const id = req.params.id;
-    db.run(`UPDATE dorms SET name = ?, price = ?, description = ?, image_url = ?, room_type = ? WHERE id = ?`,
-        [name, price, description, image_url, room_type, id], function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            logAction(adminName, `Updated dorm: ${name}`);
-            res.json({ success: true, message: "Dorm updated" });
+app.put('/api/dorms/:id', async (req, res) => {
+    try {
+        const { name, price, description, image_url, room_type, adminName } = req.body;
+        const id = req.params.id;
+        await db.collection('dorms').doc(id).update({
+            name,
+            price: parseFloat(price),
+            description,
+            image_url,
+            room_type
         });
+        logAction(adminName, `Updated dorm: ${name}`);
+        res.json({ success: true, message: "Dorm updated" });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
-app.delete('/api/dorms/:id', (req, res) => {
-    const id = req.params.id;
-    const adminName = req.query.adminName;
-    db.get(`SELECT name FROM dorms WHERE id = ?`, [id], (err, row) => {
-        if (err || !row) return res.status(404).json({ error: "Dorm not found" });
-        const dormName = row.name;
-        db.run(`DELETE FROM dorms WHERE id = ?`, [id], function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            logAction(adminName, `Deleted dorm: ${dormName}`);
-            res.json({ success: true });
-        });
-    });
+app.delete('/api/dorms/:id', async (req, res) => {
+    try {
+        const id = req.params.id;
+        const adminName = req.query.adminName;
+        const dormDoc = await db.collection('dorms').doc(id).get();
+        if (!dormDoc.exists) return res.status(404).json({ error: "Dorm not found" });
+        const dormData = dormDoc.data();
+        await db.collection('dorms').doc(id).delete();
+        logAction(adminName, `Deleted dorm: ${dormData.name}`);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // --- ACTION LOG ROUTE ---
-app.get('/api/admin/logs', (req, res) => {
-    db.all(`SELECT * FROM action_logs ORDER BY timestamp DESC`, [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+app.get('/api/admin/logs', async (req, res) => {
+    try {
+        const logsSnapshot = await db.collection('action_logs').orderBy('timestamp', 'desc').get();
+        const logs = logsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+        res.json(logs);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // --- BOOKING ROUTES ---
-app.get('/api/admin/bookings', (req, res) => {
-    const query = `
-        SELECT 
-            bookings.*, 
-            users.name as user_name,
-            dorms.price as price
-        FROM bookings 
-        LEFT JOIN users ON bookings.user_id = users.id
-        LEFT JOIN dorms ON bookings.room_name = dorms.name
-        ORDER BY bookings.id DESC
-    `;
-    db.all(query, [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+app.get('/api/admin/bookings', async (req, res) => {
+    try {
+        const bookingsSnapshot = await db.collection('bookings').orderBy('created_at', 'desc').get();
+        const bookings = [];
+
+        for (const bookingDoc of bookingsSnapshot.docs) {
+            const bookingData = bookingDoc.data();
+
+            // Get user name
+            let userName = 'Unknown User';
+            try {
+                const userDoc = await db.collection('users').doc(bookingData.user_id).get();
+                if (userDoc.exists) {
+                    userName = userDoc.data().name;
+                }
+            } catch (error) {
+                console.error('Error fetching user for booking:', error);
+            }
+
+            // Get dorm price
+            let price = 0;
+            try {
+                const dormQuery = await db.collection('dorms').where('name', '==', bookingData.room_name).limit(1).get();
+                if (!dormQuery.empty) {
+                    price = dormQuery.docs[0].data().price || 0;
+                }
+            } catch (error) {
+                console.error('Error fetching dorm price for booking:', error);
+            }
+
+            bookings.push({
+                id: bookingDoc.id,
+                ...bookingData,
+                user_name: userName,
+                price: price
+            });
+        }
+
+        res.json(bookings);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
-app.post('/api/book', upload.single('receipt'), (req, res) => {
-    const { user_id, room_name, start_date, duration, special_request, amount_paid } = req.body;
-    const receipt_url = req.file ? `/uploads/receipts/${req.file.filename}` : null;
-    
-    if (!user_id || !room_name) return res.status(400).json({ error: "Missing required booking data." });
-    
-    const sql = `INSERT INTO bookings (user_id, room_name, start_date, duration, special_request, receipt_url, amount_paid, status) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 'Pending')`;
-    
-    db.run(sql, [user_id, room_name, start_date, duration, special_request, receipt_url, amount_paid || 0], function(err) {
-        if (err) return res.status(400).json({ error: err.message });
-        res.json({ success: true, bookingId: this.lastID });
-    });
-});
+app.post('/api/book', upload.single('receipt'), async (req, res) => {
+    try {
+        const { user_id, room_name, start_date, duration, special_request, amount_paid } = req.body;
+        const receipt_url = req.file ? `/uploads/receipts/${req.file.filename}` : null;
 
-app.get('/api/bookings/user/:userId', (req, res) => {
-    db.all(`SELECT * FROM bookings WHERE user_id = ? ORDER BY id DESC`, [req.params.userId], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows || []);
-    });
-});
+        if (!user_id || !room_name) return res.status(400).json({ error: "Missing required booking data." });
 
-app.patch('/api/bookings/:id/status', (req, res) => {
-    const { status, adminName } = req.body;
-    const id = req.params.id;
-    db.get(`SELECT b.room_name, u.name FROM bookings b JOIN users u ON b.user_id = u.id WHERE b.id = ?`, [id], (err, row) => {
-        if (err || !row) return res.status(404).json({ error: "Booking not found" });
-        db.run(`UPDATE bookings SET status = ? WHERE id = ?`, [status, id], (err) => {
-            if (err) return res.status(500).json({ error: err.message });
-            logAction(adminName, `${status} booking: ${row.name} for ${row.room_name}`);
-            res.json({ success: true });
+        const bookingRef = await db.collection('bookings').add({
+            user_id,
+            room_name,
+            start_date,
+            duration: parseInt(duration),
+            special_request,
+            receipt_url,
+            amount_paid: parseFloat(amount_paid) || 0,
+            status: 'Pending',
+            created_at: admin.firestore.FieldValue.serverTimestamp()
         });
-    });
+
+        res.json({ success: true, bookingId: bookingRef.id });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
 });
 
-app.delete('/api/bookings/:id', (req, res) => {
-    const id = req.params.id;
-    const adminName = req.query.adminName;
-    db.get(`SELECT b.room_name, u.name as student_name FROM bookings b LEFT JOIN users u ON b.user_id = u.id WHERE b.id = ?`, [id], (err, row) => {
-        if (err || !row) return res.status(404).json({ error: "Booking not found" });
-        const logMsg = `Deleted booking: ${row.student_name || 'Student'} for ${row.room_name}`;
-        db.run(`DELETE FROM bookings WHERE id = ?`, [id], function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            logAction(adminName, logMsg);
-            res.json({ success: true });
-        });
-    });
+app.get('/api/bookings/user/:userId', async (req, res) => {
+    try {
+        const bookingsSnapshot = await db.collection('bookings')
+            .where('user_id', '==', req.params.userId)
+            .orderBy('created_at', 'desc')
+            .get();
+        const bookings = bookingsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+        res.json(bookings || []);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.patch('/api/bookings/:id/status', async (req, res) => {
+    try {
+        const { status, adminName } = req.body;
+        const id = req.params.id;
+
+        const bookingDoc = await db.collection('bookings').doc(id).get();
+        if (!bookingDoc.exists) return res.status(404).json({ error: "Booking not found" });
+
+        const bookingData = bookingDoc.data();
+
+        // Get user name for logging
+        let userName = 'Unknown User';
+        try {
+            const userDoc = await db.collection('users').doc(bookingData.user_id).get();
+            if (userDoc.exists) {
+                userName = userDoc.data().name;
+            }
+        } catch (error) {
+            console.error('Error fetching user for booking status update:', error);
+        }
+
+        await db.collection('bookings').doc(id).update({ status });
+        logAction(adminName, `Updated booking status for ${userName} (${bookingData.room_name}) to ${status}`);
+
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.delete('/api/bookings/:id', async (req, res) => {
+    try {
+        const id = req.params.id;
+        const adminName = req.query.adminName;
+
+        const bookingDoc = await db.collection('bookings').doc(id).get();
+        if (!bookingDoc.exists) return res.status(404).json({ error: "Booking not found" });
+
+        const bookingData = bookingDoc.data();
+
+        // Get user name for logging
+        let studentName = 'Student';
+        try {
+            const userDoc = await db.collection('users').doc(bookingData.user_id).get();
+            if (userDoc.exists) {
+                studentName = userDoc.data().name;
+            }
+        } catch (error) {
+            console.error('Error fetching user for booking deletion:', error);
+        }
+
+        await db.collection('bookings').doc(id).delete();
+        const logMsg = `Deleted booking: ${studentName} for ${bookingData.room_name}`;
+        logAction(adminName, logMsg);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // --- CATCH-ALL ---
