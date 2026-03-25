@@ -100,6 +100,12 @@
                 document.getElementById('room-desc').innerText = "All-inclusive utilities, high-speed WiFi, and 24/7 security.";
             }
 
+            // Set minimum date to today (prevent booking from past dates, but allow today)
+            const startDateInput = document.querySelector('input[name="start_date"]');
+            const today = new Date();
+            const minDate = today.toISOString().split('T')[0];
+            startDateInput.setAttribute('min', minDate);
+
             // 2. Handle Form Submission
             document.getElementById('booking-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -112,6 +118,18 @@
                 }
 
                 const formData = new FormData(e.target);
+                const selectedDateString = formData.get('start_date');
+                
+                // Get today's date in YYYY-MM-DD format
+                const today = new Date();
+                const todayString = today.toISOString().split('T')[0];
+
+                // Validate that start date is not in the past (compare as strings in YYYY-MM-DD format)
+                if (selectedDateString < todayString) {
+                    alert("Move-in date cannot be in the past. Please select today or a future date.");
+                    return;
+                }
+
                 const data = {
                 user_id: user.id,
                 student_name: user.name,

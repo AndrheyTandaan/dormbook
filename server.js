@@ -634,6 +634,13 @@ app.get('/api/admin/bookings', async (req, res) => {
 app.post('/api/book', upload.single('receipt'), async (req, res) => {
     try {
         const { user_id, room_name, start_date, duration, special_request, amount_paid } = req.body;
+        
+        // Validate start_date is not in the past
+        const today = new Date().toISOString().split('T')[0];
+        if (start_date < today) {
+            return res.status(400).json({ error: "Move-in date cannot be in the past. Please select today or a future date." });
+        }
+
         let receipt_url = null;
 
         // Upload receipt to Firebase Storage if file exists

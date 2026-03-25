@@ -595,6 +595,13 @@
             document.getElementById('modal-room-name').innerText = currentRoom.name;
             document.getElementById('modal-room-desc').innerText = currentRoom.description;
             document.getElementById('booking-modal').classList.remove('hidden');
+            
+            // Set minimum date to today (prevent booking from past dates)
+            const startDateInput = document.querySelector('#modal-booking-form input[name="start_date"]');
+            const today = new Date();
+            const minDate = today.toISOString().split('T')[0];
+            startDateInput.setAttribute('min', minDate);
+            
             selectPayment('full');
             goToStep(1);
         }
@@ -633,6 +640,15 @@
             e.preventDefault();
             const user = JSON.parse(localStorage.getItem('user'));
             const formData = new FormData(e.target);
+            const selectedDateString = formData.get('start_date');
+            
+            // Validate that start date is not in the past
+            const today = new Date();
+            const todayString = today.toISOString().split('T')[0];
+            if (selectedDateString < todayString) {
+                alert("Move-in date cannot be in the past. Please select today or a future date.");
+                return;
+            }
 
             const cashToSubmit = (selectedPaymentType === 'full') ? currentRoomPrice : (currentRoomPrice * DOWNPAYMENT_PERCENT);
 
