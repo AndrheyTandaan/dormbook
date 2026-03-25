@@ -30,8 +30,6 @@
             from { opacity: 0; transform: translateY(-10px) scale(0.95); }
             to { opacity: 1; transform: translateY(0) scale(1); }
         }
-        #switch-account-menu { display: none !important; pointer-events: none; opacity: 0; transition: opacity 0.2s ease-out; }
-        #switch-account-menu:not(.hidden) { display: flex !important; pointer-events: auto; opacity: 1; }
         #sidebar-drawer { transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
         #sidebar-overlay.active { opacity: 1; pointer-events: auto; }
 
@@ -55,15 +53,11 @@
         <div class="flex justify-between items-center mb-8">
             <span class="text-[10px] font-black uppercase text-gray-400 tracking-widest">Account</span>
             <div class="flex gap-2">
-                <button type="button" id="switch-account-icon-btn" onclick="toggleSwitchAccountMenu(event)" class="w-12 h-12 flex items-center justify-center bg-gray-100 rounded-2xl border hover:bg-gray-200 transition cursor-pointer" title="Switch Account">
-                    <i class="fa-solid fa-arrow-right-arrow-left text-gray-600"></i>
-                </button>
                 <button onclick="toggleSidebar()" class="w-12 h-12 flex flex-col items-center justify-center bg-gray-100 rounded-2xl border hover:bg-gray-200 transition">
                     <i class="fa-solid fa-xmark text-gray-500"></i>
                 </button>
             </div>
         </div>
-        <div id="switch-account-menu" class="dropdown-menu hidden w-full bg-white rounded-2xl shadow-lg border border-gray-200 p-2 mb-4 overflow-y-auto max-h-40"></div>
         <div id="sidebar-profile-box" class="mb-10"></div>
         <div id="sidebar-links" class="space-y-2 flex-grow overflow-y-auto pr-2"></div>
         <button onclick="logout()" class="w-full bg-red-50 text-red-600 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-100 transition flex items-center justify-center gap-2">
@@ -548,66 +542,6 @@
         }
 
         function logout() { localStorage.removeItem('user'); window.location.href = 'auth.html'; }
-
-        function openAccountSelectorFromList(idx) {
-            const switchUsers = window.__switchUsers || JSON.parse(localStorage.getItem('savedUsers') || '[]');
-            const selected = switchUsers[idx];
-            if (!selected) return;
-
-            fetch(`/api/users/${selected.id}/last_login`, { method: 'PATCH' })
-                .catch(() => console.warn('Could not update last_login in DB'))
-                .finally(() => {
-                    localStorage.setItem('user', JSON.stringify(selected));
-                    const destination = (selected.role === 'admin') ? 'admin_panel.html' : 'index.html';
-                    window.location.href = destination;
-                });
-        }
-
-        async function loadSwitchAccounts() {
-            const menu = document.getElementById('switch-account-menu');
-            if (!menu) return;
-
-            let savedUsers = [];
-            try {
-                const usersRes = await fetch('/api/users?t=' + Date.now());
-                if (usersRes.ok) savedUsers = await usersRes.json();
-            } catch (err) {
-                console.warn('Failed to load users from DB, falling back to localStorage', err);
-            }
-
-            if (savedUsers.length === 0) {
-                savedUsers = JSON.parse(localStorage.getItem('savedUsers') || '[]');
-            }
-
-            if (savedUsers.length === 0) {
-                menu.innerHTML = `<div class="px-3 py-2 text-xs text-gray-500">No saved users. <a href="auth.html" class="text-indigo-600 underline">Login/Register</a></div>`;
-                return;
-            }
-
-            window.__switchUsers = savedUsers;
-            menu.innerHTML = `<div class="flex flex-col space-y-1">
-                ${savedUsers.map((u, idx) => {
-                    const label = `${u.name || u.email || 'User'} (${u.role || 'user'})`;
-                    return `<button onclick="openAccountSelectorFromList(${idx})" class="w-full text-left px-3 py-2 text-xs font-black text-gray-700 hover:bg-gray-100 rounded-xl">${label}</button>`;
-                }).join('')}
-            </div>`;
-        }
-
-        function toggleSwitchAccountMenu(e) {
-            e.stopPropagation();
-            const menu = document.getElementById('switch-account-menu');
-            if (!menu) {
-                console.error('Menu element not found');
-                return;
-            }
-            const isHidden = menu.classList.contains('hidden');
-            if (isHidden) {
-                menu.classList.remove('hidden');
-                loadSwitchAccounts();
-            } else {
-                menu.classList.add('hidden');
-            }
-        }
 
         window.onclick = () => {
             document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.add('hidden'));

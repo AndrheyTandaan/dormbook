@@ -65,15 +65,11 @@
         <div class="flex justify-between items-center mb-8">
             <span class="text-[10px] font-black uppercase text-gray-400 tracking-widest">Account</span>
             <div class="flex gap-2">
-                <button type="button" id="switch-account-icon-btn" onclick="toggleSwitchAccountMenu(event)" class="w-12 h-12 flex items-center justify-center bg-gray-100 rounded-2xl border hover:bg-gray-200 transition cursor-pointer" title="Switch Account">
-                    <i class="fa-solid fa-arrow-right-arrow-left text-gray-600"></i>
-                </button>
                 <button onclick="toggleSidebar()" class="w-12 h-12 flex flex-col items-center justify-center bg-gray-100 rounded-2xl border hover:bg-gray-200 transition">
                     <i class="fa-solid fa-xmark text-gray-500"></i>
                 </button>
             </div>
         </div>
-        <div id="switch-account-menu" class="dropdown-menu hidden w-full bg-white rounded-2xl shadow-lg border border-gray-200 p-2 mb-4 overflow-y-auto max-h-40"></div>
         <div id="sidebar-profile-box" class="mb-10"></div>
         <div id="sidebar-links" class="space-y-2 flex-grow overflow-y-auto pr-2"></div>
         <button onclick="logout()" class="w-full bg-red-50 text-red-600 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-100 transition flex items-center justify-center gap-2">
