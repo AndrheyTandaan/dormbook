@@ -6,10 +6,8 @@ const cors = require('cors');
 const fs = require('fs');
 const multer = require('multer');
 require('dotenv').config();
-const { OAuth2Client } = require('google-auth-library');
 const session = require('express-session');
 const passport = require('passport');
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const http = require('http');
 const { Server } = require('socket.io');
 
@@ -63,7 +61,6 @@ async function initializeFirestore() {
                 password: hashedPass,
                 role: 'admin',
                 profile_image: null,
-                google_id: null,
                 created_at: admin.firestore.FieldValue.serverTimestamp(),
                 last_login: admin.firestore.FieldValue.serverTimestamp(),
                 notif_badge_viewed_at: null
@@ -180,59 +177,6 @@ passport.deserializeUser(async (id, done) => {
     }
 });
 
-// Google OAuth Strategy
-passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: '/auth/google/callback'
-}, async (accessToken, refreshToken, profile, done) => {
-    const googleId = profile.id;
-    const email = profile.emails[0].value;
-    const name = profile.displayName;
-
-    try {
-        // Check if user exists by google_id or email
-        const usersRef = db.collection('users');
-        const querySnapshot = await usersRef.where('google_id', '==', googleId).get();
-
-        let userDoc;
-        if (!querySnapshot.empty) {
-            userDoc = querySnapshot.docs[0];
-        } else {
-            // Check by email
-            const emailQuery = await usersRef.where('email', '==', email).get();
-            if (!emailQuery.empty) {
-                userDoc = emailQuery.docs[0];
-                // Update google_id if not set
-                await userDoc.ref.update({ google_id: googleId });
-            }
-        }
-
-        if (userDoc) {
-            return done(null, { id: userDoc.id, ...userDoc.data() });
-        } else {
-            // Create new user
-            const newUserRef = usersRef.doc(email); // Use email as document ID
-            await newUserRef.set({
-                id: email,
-                name: name,
-                email: email,
-                google_id: googleId,
-                role: 'student',
-                profile_image: null,
-                created_at: admin.firestore.FieldValue.serverTimestamp(),
-                last_login: admin.firestore.FieldValue.serverTimestamp(),
-                notif_badge_viewed_at: null
-            });
-
-            const newUserDoc = await newUserRef.get();
-            return done(null, { id: newUserDoc.id, ...newUserDoc.data() });
-        }
-    } catch (error) {
-        return done(error, null);
-    }
-}));
-
 // --- LOGGING HELPER FUNCTION ---
 async function logAction(adminName, details) {
     try {
@@ -285,7 +229,6 @@ app.post('/api/register', async (req, res) => {
             password: hashedPassword,
             role: 'student',
             profile_image: null,
-            google_id: null,
             created_at: admin.firestore.FieldValue.serverTimestamp(),
             last_login: admin.firestore.FieldValue.serverTimestamp(),
             notif_badge_viewed_at: null
@@ -309,11 +252,6 @@ app.post('/api/login', async (req, res) => {
         const userDoc = userQuery.docs[0];
         const userData = userDoc.data();
 
-        // Check password (skip for Google users)
-        if (userData.google_id) {
-            return res.status(400).json({ error: 'Please use Google login for this account' });
-        }
-
         const isValidPassword = await bcrypt.compare(password, userData.password);
         if (!isValidPassword) {
             return res.status(400).json({ error: 'Invalid email or password' });
@@ -330,28 +268,6 @@ app.post('/api/login', async (req, res) => {
         res.status(500).json({ error: "Server error" });
     }
 });
-
-// Google Auth Routes
-app.get('/auth/google',
-    passport.authenticate('google', { scope: ['profile', 'email'] })
-);
-
-app.get('/auth/google/callback',
-    passport.authenticate('google', { failureRedirect: '/auth.html' }),
-    async (req, res) => {
-        try {
-            // Update last_login
-            await db.collection('users').doc(req.user.id).update({
-                last_login: admin.firestore.FieldValue.serverTimestamp()
-            });
-            // Redirect to dashboard
-            res.redirect('/index.html');
-        } catch (error) {
-            console.error('Google callback error:', error);
-            res.redirect('/auth.html');
-        }
-    }
-);
 
 app.get('/auth/logout', (req, res) => {
     req.logout(() => {
@@ -398,11 +314,6 @@ app.put('/api/users/:id/profile', async (req, res) => {
         if (newPassword) {
             if (!currentPassword) {
                 return res.status(400).json({ error: 'Current password required to change password' });
-            }
-
-            // For Google users, they don't have passwords
-            if (userData.google_id) {
-                return res.status(400).json({ error: 'Cannot change password for Google accounts' });
             }
 
             // Verify current password

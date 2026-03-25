@@ -154,11 +154,6 @@
             } catch (err) {
                 console.error('Failed to load user profile:', err);
             }
-
-            // Hide password section for Google users (they don't have passwords)
-            if (user.google_id) {
-                document.getElementById('password-section').style.display = 'none';
-            }
         }
 
         document.getElementById('profile-form').addEventListener('submit', async (e) => {

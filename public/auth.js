@@ -99,10 +99,6 @@ document.addEventListener('DOMContentLoaded', () => {
         submitBtn.innerText = isLogin ? "Login" : "Register";
     }
 
-    // --- GOOGLE SIGN IN ---
-    window.signInWithGoogle = () => {
-        window.location.href = '/auth/google';
-    };
 });
 
 // Password Toggle
