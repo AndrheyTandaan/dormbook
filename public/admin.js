@@ -192,6 +192,7 @@ function openDetailView(id) {
 
 async function updateStatus(id, status) {
     try {
+        window.showPageLoader();
         const res = await fetch(`/api/bookings/${id}/status`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
@@ -201,11 +202,14 @@ async function updateStatus(id, status) {
         if (res.ok) {
             closeReceiptModal();
             refreshAdminData();
+            window.hidePageLoader();
         } else {
             const error = await res.json();
+            window.hidePageLoader();
             alert("Error: " + (error.error || "Failed to update status"));
         }
     } catch (err) { 
+        window.hidePageLoader();
         console.error("Update error:", err);
         alert("Error: " + err.message);
     }

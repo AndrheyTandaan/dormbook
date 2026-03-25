@@ -486,13 +486,16 @@ async function fetchDueDates() {
 
         async function updateStatus(id, status, adminName) {
             try {
+                window.showPageLoader();
                 await fetch(`/api/bookings/${id}/status`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status, adminName })
                 });
-                refreshAdminData();
+                await refreshAdminData();
+                window.hidePageLoader();
             } catch (err) {
+                window.hidePageLoader();
                 console.error("Error updating status:", err);
             }
         }
