@@ -426,11 +426,22 @@
                             
                             <div class="bg-gray-50 p-4 rounded-2xl">
                                 <p class="text-[10px] font-black text-gray-600 uppercase mb-2">Booking Date</p>
-                                <p class="text-sm font-bold text-gray-800">${new Date(booking.created_at || booking.start_date).toLocaleDateString('en-PH', { 
-                                    year: 'numeric', 
-                                    month: 'long', 
-                                    day: 'numeric' 
-                                })}</p>
+                                <p class="text-sm font-bold text-gray-800">${(() => {
+                                    let dateObj;
+                                    // Handle Firestore timestamp objects with _seconds property
+                                    if (booking.created_at?._seconds) {
+                                        dateObj = new Date(booking.created_at._seconds * 1000);
+                                    } else if (booking.start_date) {
+                                        dateObj = new Date(booking.start_date);
+                                    } else {
+                                        return 'No date available';
+                                    }
+                                    return dateObj.toLocaleDateString('en-PH', { 
+                                        year: 'numeric', 
+                                        month: 'long', 
+                                        day: 'numeric' 
+                                    });
+                                })()}</p>
                             </div>
                             
                             ${booking.request ? `
