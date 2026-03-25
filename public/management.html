@@ -64,7 +64,8 @@ body { background-color: #f9fafb; min-height: 100vh; height: auto !important; ov
         </div>
         <div id="modal-content" class="p-8 space-y-6"></div>
         <div class="flex gap-4 p-8 border-t border-gray-100 justify-end">
-            <button onclick="closeBookingModal()" class="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-black uppercase text-xs hover:bg-gray-200 transition">Close</button>
+            <button onclick="closeBookingModal()" class="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-black uppercase text-xs hover:bg-gray-200 transition">Cancel</button>
+            <button onclick="deleteBooking()" class="px-6 py-3 bg-red-50 text-red-600 rounded-xl font-black uppercase text-xs hover:bg-red-100 transition"><i class="fa-solid fa-trash-can mr-2"></i>Delete</button>
         </div>
     </div>
 </div>
@@ -446,9 +447,12 @@ async function fetchDueDates() {
         }
 
         // BOOKING MODAL FUNCTIONS
+        let currentBookingId = null;
+        
         function openBookingModal(booking) {
             const modal = document.getElementById('booking-modal');
             const content = document.getElementById('modal-content');
+            currentBookingId = booking.id;
             
             const startStr = booking.start_date ? booking.start_date.split('T')[0] : '';
             const [year, month, day] = startStr.split('-');
@@ -518,6 +522,23 @@ async function fetchDueDates() {
             const modal = document.getElementById('booking-modal');
             modal.classList.remove('opacity-100', 'pointer-events-auto');
             modal.querySelector('div').classList.remove('scale-100');
+            currentBookingId = null;
+        }
+        
+        async function deleteBooking() {
+            if (!currentBookingId) return;
+            if (!confirm('Are you sure you want to delete this booking? This action cannot be undone.')) return;
+            
+            try {
+                const user = JSON.parse(localStorage.getItem('user'));
+                const adminName = user ? user.name : 'Admin';
+                await fetch(`/api/bookings/${currentBookingId}?adminName=${encodeURIComponent(adminName)}`, { method: 'DELETE' });
+                closeBookingModal();
+                refreshAdminData();
+            } catch (err) {
+                console.error('Error deleting booking:', err);
+                alert('Failed to delete booking');
+            }
         }
         
         document.getElementById('booking-modal').addEventListener('click', closeBookingModal);
