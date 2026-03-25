@@ -65,7 +65,29 @@ body { background-color: #f9fafb; min-height: 100vh; height: auto !important; ov
         <div id="modal-content" class="p-8 space-y-6"></div>
         <div class="flex gap-4 p-8 border-t border-gray-100 justify-end">
             <button onclick="closeBookingModal()" class="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-black uppercase text-xs hover:bg-gray-200 transition">Cancel</button>
+            <button id="view-receipt-btn" onclick="viewReceipt()" class="px-6 py-3 bg-indigo-50 text-indigo-600 rounded-xl font-black uppercase text-xs hover:bg-indigo-100 transition"><i class="fa-solid fa-image mr-2"></i>View Receipt</button>
             <button onclick="deleteBooking()" class="px-6 py-3 bg-red-50 text-red-600 rounded-xl font-black uppercase text-xs hover:bg-red-100 transition"><i class="fa-solid fa-trash-can mr-2"></i>Delete</button>
+        </div>
+    </div>
+</div>
+
+<!-- Receipt Viewer Modal -->
+<div id="receipt-viewer-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[90] opacity-0 pointer-events-none transition-opacity duration-300 flex items-center justify-center p-4" onclick="if(event.target === this) closeReceiptViewer()">
+    <div class="bg-white rounded-[2.5rem] shadow-2xl max-w-4xl w-full transform scale-95 transition-transform duration-300 overflow-hidden" onclick="event.stopPropagation()">
+        <div class="flex justify-between items-center p-6 border-b border-gray-100 bg-gray-50">
+            <h3 class="text-xl font-black uppercase tracking-tight">Receipt Preview</h3>
+            <button onclick="closeReceiptViewer()" class="w-10 h-10 flex items-center justify-center bg-gray-200 rounded-xl hover:bg-gray-300 transition">
+                <i class="fa-solid fa-xmark text-gray-700"></i>
+            </button>
+        </div>
+        <div class="p-6 bg-gray-100 flex items-center justify-center" style="min-height: 400px;">
+            <img id="receipt-image" src="" alt="Receipt" class="max-w-full max-h-[500px] rounded-xl shadow-lg object-contain">
+        </div>
+        <div class="p-6 border-t border-gray-100 flex gap-4 justify-end bg-gray-50">
+            <button onclick="closeReceiptViewer()" class="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-black uppercase text-xs hover:bg-gray-200 transition">Close</button>
+            <a id="download-receipt-link" href="#" download class="px-6 py-3 bg-indigo-600 text-white rounded-xl font-black uppercase text-xs hover:bg-indigo-700 transition inline-flex items-center gap-2">
+                <i class="fa-solid fa-download"></i> Download
+            </a>
         </div>
     </div>
 </div>
@@ -477,11 +499,13 @@ async function fetchDueDates() {
 
         // BOOKING MODAL FUNCTIONS
         let currentBookingId = null;
+        let currentBookingData = null;
         
         function openBookingModal(booking) {
             const modal = document.getElementById('booking-modal');
             const content = document.getElementById('modal-content');
             currentBookingId = booking.id;
+            currentBookingData = booking;
             
             const startStr = booking.start_date ? booking.start_date.split('T')[0] : '';
             const [year, month, day] = startStr.split('-');
@@ -543,6 +567,14 @@ async function fetchDueDates() {
                 </div>
             `;
             
+            // Show/hide View Receipt button based on whether receipt exists
+            const viewReceiptBtn = document.getElementById('view-receipt-btn');
+            if (booking.receipt_url) {
+                viewReceiptBtn.style.display = 'inline-flex';
+            } else {
+                viewReceiptBtn.style.display = 'none';
+            }
+            
             modal.classList.add('opacity-100', 'pointer-events-auto');
             modal.querySelector('div').classList.add('scale-100');
         }
@@ -552,6 +584,7 @@ async function fetchDueDates() {
             modal.classList.remove('opacity-100', 'pointer-events-auto');
             modal.querySelector('div').classList.remove('scale-100');
             currentBookingId = null;
+            currentBookingData = null;
         }
         
         async function deleteBooking() {
@@ -568,6 +601,30 @@ async function fetchDueDates() {
                 console.error('Error deleting booking:', err);
                 alert('Failed to delete booking');
             }
+        }
+
+        function viewReceipt() {
+            if (!currentBookingData || !currentBookingData.receipt_url) {
+                alert('No receipt available for this booking.');
+                return;
+            }
+            
+            const receiptViewer = document.getElementById('receipt-viewer-modal');
+            const receiptImage = document.getElementById('receipt-image');
+            const downloadLink = document.getElementById('download-receipt-link');
+            
+            receiptImage.src = currentBookingData.receipt_url;
+            downloadLink.href = currentBookingData.receipt_url;
+            downloadLink.download = `receipt-${currentBookingData.id}.jpg`;
+            
+            receiptViewer.classList.add('opacity-100', 'pointer-events-auto');
+            receiptViewer.querySelector('div').classList.add('scale-100');
+        }
+        
+        function closeReceiptViewer() {
+            const receiptViewer = document.getElementById('receipt-viewer-modal');
+            receiptViewer.classList.remove('opacity-100', 'pointer-events-auto');
+            receiptViewer.querySelector('div').classList.remove('scale-100');
         }
         
         document.getElementById('booking-modal').addEventListener('click', closeBookingModal);
