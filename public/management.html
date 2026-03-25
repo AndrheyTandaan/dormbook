@@ -159,9 +159,11 @@ body { background-color: #f9fafb; min-height: 100vh; height: auto !important; ov
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     setupNavbar();
-    refreshAdminData();
+    window.showPageLoader();
+    await refreshAdminData();
+    window.hidePageLoader();
 });
 
 // NAVBAR + SIDEBAR SETUP
