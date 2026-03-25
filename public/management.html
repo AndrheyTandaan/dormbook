@@ -352,13 +352,41 @@ async function fetchDueDates() {
         async function fetchInventory(adminName) {
             const list = document.getElementById('management-inventory-list');
             try {
-                const res = await fetch('/api/rooms'); 
-                const dorms = await res.json();
+                const [roomRes, bookingRes] = await Promise.all([
+                    fetch('/api/rooms'),
+                    fetch('/api/admin/bookings?t=' + Date.now())
+                ]);
+                const dorms = await roomRes.json();
+                const bookings = await bookingRes.json();
+                
+                // Count approved residents per room
+                const residentCount = {};
+                bookings.forEach(b => {
+                    if (b.status === 'Approved') {
+                        residentCount[b.room_name] = (residentCount[b.room_name] || 0) + 1;
+                    }
+                });
+                
+                // Map room type to capacity
+                const getCapacity = (roomType) => {
+                    if (!roomType) return 1;
+                    const type = roomType.toLowerCase();
+                    if (type.includes('single')) return 1;
+                    if (type.includes('double')) return 2;
+                    if (type.includes('triple')) return 3;
+                    if (type.includes('quad')) return 4;
+                    return 1; // Default
+                };
                 
                 // Escape adminName for inline handlers to prevent quote breaks
                 const safeAdminName = adminName.replace(/'/g, "\\'");
 
-                list.innerHTML = dorms.map(dorm => `
+                list.innerHTML = dorms.map(dorm => {
+                    const capacity = getCapacity(dorm.room_type);
+                    const currentCount = residentCount[dorm.name] || 0;
+                    const isFull = currentCount >= capacity;
+
+                    return `
                     <tr class="hover:bg-gray-50/50 transition-colors">
                         <td class="p-6">
                             <div class="flex items-center gap-3">
@@ -372,10 +400,10 @@ async function fetchDueDates() {
                             </span>
                         </td>
                         <td class="p-6 font-bold text-indigo-600">₱${dorm.price}</td>
-                        <td class="p-6 text-gray-500 font-medium">${dorm.is_occupied ? 'Occupied' : '—'}</td>
+                        <td class="p-6 text-gray-500 font-medium font-bold">${currentCount}/${capacity}</td>
                         <td class="p-6">
-                            <span class="px-3 py-1 rounded-full text-[9px] font-black uppercase ${!dorm.is_occupied ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}">
-                                ${dorm.is_occupied ? 'Occupied' : 'Available'}
+                            <span class="px-3 py-1 rounded-full text-[9px] font-black uppercase ${!isFull ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}">
+                                ${isFull ? 'Occupied' : 'Available'}
                             </span>
                         </td>
                         <td class="p-6">
@@ -385,7 +413,8 @@ async function fetchDueDates() {
                                 </button>
                             </div>
                         </td>
-                    </tr>`).join('');
+                    </tr>`;
+                }).join('');
             } catch (err) { console.error(err); }
         }
 
