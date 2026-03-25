@@ -131,9 +131,11 @@
 
     <script src="navbar.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             updateNavbar();
-            loadUserProfile();
+            window.showPageLoader();
+            await loadUserProfile();
+            window.hidePageLoader();
         });
 
         async function loadUserProfile() {

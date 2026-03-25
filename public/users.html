@@ -107,13 +107,15 @@
         let allUsers = [];
         const currentUser = JSON.parse(localStorage.getItem('user'));
 
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             if (!currentUser || currentUser.role !== 'admin') {
                 window.location.href = 'index.html';
                 return;
             }
             setupNavbar();
-            loadUsers();
+            window.showPageLoader();
+            await loadUsers();
+            window.hidePageLoader();
         });
 
         function setupNavbar() {

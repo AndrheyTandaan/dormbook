@@ -77,13 +77,15 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             const userJson = localStorage.getItem('user');
             const user = userJson ? JSON.parse(userJson) : null;
             if (!user) { window.location.href = 'auth.html'; return; }
 
             setupNavbar(user);
-            fetchBookings(user);
+            window.showPageLoader();
+            await fetchBookings(user);
+            window.hidePageLoader();
         });
 
         function setupNavbar(user) {

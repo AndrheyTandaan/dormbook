@@ -128,6 +128,7 @@
 
                 try {
                     // NOTE: Ensure your backend endpoint is /api/book
+                    window.showPageLoader();
                     const res = await fetch('/api/book', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -137,11 +138,14 @@
                     if (res.ok) {
                         document.getElementById('reservation-panel').classList.add('hidden');
                         document.getElementById('success-panel').classList.remove('hidden');
+                        window.hidePageLoader();
                     } else {
+                        window.hidePageLoader();
                         const errData = await res.json();
                         alert("Error: " + (errData.message || "Failed to submit booking."));
                     }
                 } catch (error) {
+                    window.hidePageLoader();
                     console.error("Fetch error:", error);
                     alert("Network error. Is your server running?");
                 }

@@ -200,6 +200,7 @@
                 };
 
                 try {
+                    window.showPageLoader();
                     const response = await fetch('/api/dorms', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -210,10 +211,12 @@
                         alert("Room added successfully!");
                         window.location.href = 'management.html#inventory-section';
                     } else {
+                        window.hidePageLoader();
                         const errorData = await response.json();
                         alert("Error: " + (errorData.error || "Failed to save room"));
                     }
                 } catch (err) {
+                    window.hidePageLoader();
                     console.error("Backend connection error:", err);
                     alert("Could not connect to the server.");
                 }

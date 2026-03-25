@@ -112,14 +112,16 @@
             return 1;
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             const user = JSON.parse(userCheck);
             if(!user) {
                 window.location.href = 'auth.html';
                 return;
             }
             setupNavbar();
-            loadUserData(user);
+            window.showPageLoader();
+            await loadUserData(user);
+            window.hidePageLoader();
         });
 
         function setupNavbar() {
