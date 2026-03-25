@@ -478,10 +478,21 @@ app.get('/api/dorms', async (req, res) => {
                 .where('status', '==', 'Approved')
                 .get();
 
+            // Also check for case-insensitive matches (fallback for legacy data)
+            let isOccupied = !bookingsSnapshot.empty;
+            if (!isOccupied) {
+                const caseInsensitiveSnapshot = await db.collection('bookings')
+                    .where('status', '==', 'Approved')
+                    .get();
+                isOccupied = caseInsensitiveSnapshot.docs.some(doc => 
+                    doc.data().room_name.toLowerCase() === dormData.name.toLowerCase()
+                );
+            }
+
             dorms.push({
                 id: dormDoc.id,
                 ...dormData,
-                is_occupied: !bookingsSnapshot.empty
+                is_occupied: isOccupied
             });
         }
 

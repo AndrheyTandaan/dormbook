@@ -228,9 +228,9 @@
                 const priceMap = {};
                 rooms.forEach(r => {
                     roomMap[r.name] = getCapacity(r.room_type);
+                    roomMap[r.name.toLowerCase()] = getCapacity(r.room_type); // Case-insensitive fallback
                     priceMap[r.name] = parseFloat(r.price) || 0;
-                    // Also store lowercase version for case-insensitive matching
-                    priceMap[r.name.toLowerCase()] = parseFloat(r.price) || 0;
+                    priceMap[r.name.toLowerCase()] = parseFloat(r.price) || 0; // Case-insensitive fallback
                 });
 
                 console.log('Rooms data:', rooms);
@@ -238,7 +238,8 @@
 
                 const roomCounts = {};
                 allBookings.filter(b => b.status === 'Approved').forEach(b => {
-                    roomCounts[b.room_name] = (roomCounts[b.room_name] || 0) + 1;
+                    const roomName = b.room_name.toLowerCase();
+                    roomCounts[roomName] = (roomCounts[roomName] || 0) + 1;
                 });
 
                 const myStays = allBookings.filter(b => b.user_name === user.name && b.status === 'Approved');
@@ -256,7 +257,8 @@
 
                 // 1. Render Bookings
                 bookingContainer.innerHTML = myStays.map(stay => {
-                    const isFull = (roomCounts[stay.room_name] || 0) >= (roomMap[stay.room_name] || 1);
+                    const roomNameKey = stay.room_name.toLowerCase();
+                    const isFull = (roomCounts[roomNameKey] || 0) >= (roomMap[roomNameKey] || 1);
                     const status = isFull ? 'Booked' : 'Available';
                     const statusClass = isFull ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600';
                     return `

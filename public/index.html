@@ -550,11 +550,15 @@
                 const bookings = await bookingsRes.json();
                 const approvedBookings = bookings.filter(b => b.status === 'Approved');
                 const roomCounts = {};
-                approvedBookings.forEach(b => roomCounts[b.room_name] = (roomCounts[b.room_name] || 0) + 1);
+                approvedBookings.forEach(b => {
+                    const roomName = b.room_name.toLowerCase();
+                    roomCounts[roomName] = (roomCounts[roomName] || 0) + 1;
+                });
 
                 container.innerHTML = rooms.map((room, index) => {
                     const capacity = getCapacity(room.room_type);
-                    const isFull = (roomCounts[room.name] || 0) >= capacity;
+                    const roomCount = roomCounts[room.name.toLowerCase()] || 0;
+                    const isFull = roomCount >= capacity;
                     const btn = (user && user.role === 'admin') 
                         ? `<button onclick="window.location.href='management.html#inventory-section'" class="w-full bg-gray-800 text-white py-4 rounded-2xl text-xs font-black uppercase">Manage</button>`
                         : isFull 

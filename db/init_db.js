@@ -44,8 +44,8 @@ db.serialize(() => {
 
     // 4. Add Sample Data
     const insert = db.prepare(`INSERT INTO dorms (name, price, description, image_url) VALUES (?, ?, ?, ?)`);
-    insert.run("Premium Solo Room", "5000/mo", "AC, Private Bath", "https://via.placeholder.com/150");
-    insert.run("Shared Quad Room", "2500/mo", "Spacious for 4 people", "https://via.placeholder.com/150");
+    insert.run("Premium Solo Room", "5000/mo", "AC, Private Bath", "https://placehold.co/600x400?text=Premium+Solo+Room");
+    insert.run("Shared Quad Room", "2500/mo", "Spacious for 4 people", "https://placehold.co/600x400?text=Shared+Quad+Room");
     insert.finalize(() => {
         console.log("✔ Sample data inserted!");
         console.log("\n🚀 Setup Complete! Your .db file should no longer be empty.");
