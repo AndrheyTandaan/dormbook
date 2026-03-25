@@ -654,7 +654,9 @@ app.post('/api/book', upload.single('receipt'), async (req, res) => {
                 console.log(`Receipt uploaded to Firebase Storage: ${receipt_url}`);
             } catch (uploadErr) {
                 console.error('Error uploading receipt to Firebase Storage:', uploadErr);
-                // Continue without receipt if upload fails
+                // Fallback: use local file path if Firebase Storage fails
+                receipt_url = `/uploads/receipts/${req.file.filename}`;
+                console.log(`Using local receipt path as fallback: ${receipt_url}`);
             }
         }
 
