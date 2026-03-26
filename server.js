@@ -470,6 +470,17 @@ app.get('/api/dorms', async (req, res) => {
         const dormsSnapshot = await db.collection('dorms').get();
         const dorms = [];
 
+        // Helper function to get capacity from room type
+        const getCapacity = (roomType) => {
+            if (!roomType) return 1;
+            const type = roomType.toLowerCase();
+            if (type.includes('single') || type.includes('1 person')) return 1;
+            if (type.includes('double') || type.includes('2 person')) return 2;
+            if (type.includes('triple') || type.includes('3 person')) return 3;
+            if (type.includes('quad') || type.includes('4 person')) return 4;
+            return 1; // Default
+        };
+
         for (const dormDoc of dormsSnapshot.docs) {
             const dormData = dormDoc.data();
             // Check if dorm is occupied by counting approved bookings
@@ -479,15 +490,18 @@ app.get('/api/dorms', async (req, res) => {
                 .get();
 
             // Also check for case-insensitive matches (fallback for legacy data)
-            let isOccupied = !bookingsSnapshot.empty;
-            if (!isOccupied) {
+            let bookingCount = bookingsSnapshot.size;
+            if (bookingCount === 0) {
                 const caseInsensitiveSnapshot = await db.collection('bookings')
                     .where('status', '==', 'Approved')
                     .get();
-                isOccupied = caseInsensitiveSnapshot.docs.some(doc => 
+                bookingCount = caseInsensitiveSnapshot.docs.filter(doc => 
                     doc.data().room_name.toLowerCase() === dormData.name.toLowerCase()
-                );
+                ).length;
             }
+
+            const capacity = getCapacity(dormData.room_type);
+            const isOccupied = bookingCount >= capacity;
 
             dorms.push({
                 id: dormDoc.id,

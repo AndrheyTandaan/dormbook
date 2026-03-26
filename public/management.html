@@ -383,11 +383,12 @@ async function fetchDueDates() {
                 const dorms = await roomRes.json();
                 const bookings = await bookingRes.json();
                 
-                // Count approved residents per room
+                // Count approved residents per room (case-insensitive, trim spaces)
                 const residentCount = {};
                 bookings.forEach(b => {
                     if (b.status === 'Approved') {
-                        residentCount[b.room_name] = (residentCount[b.room_name] || 0) + 1;
+                        const roomKey = (b.room_name || '').toLowerCase().trim();
+                        residentCount[roomKey] = (residentCount[roomKey] || 0) + 1;
                     }
                 });
                 
@@ -407,7 +408,8 @@ async function fetchDueDates() {
 
                 list.innerHTML = dorms.map(dorm => {
                     const capacity = getCapacity(dorm.room_type);
-                    const currentCount = residentCount[dorm.name] || 0;
+                    const roomKey = (dorm.name || '').toLowerCase().trim();
+                    const currentCount = residentCount[roomKey] || 0;
                     const isFull = currentCount >= capacity;
 
                     return `
