@@ -39,16 +39,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- 4. FORM SUBMISSION ---
+    const authError = document.getElementById('auth-error');
+
     if (authForm) {
         authForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+            authError?.classList.add('hidden');
+            authError && (authError.innerText = '');
+
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch animate-spin"></i> Processing...';
-            
+
             const formData = new FormData(authForm);
             const data = Object.fromEntries(formData.entries());
-            
+
             // Clean data based on mode
             if (isLogin) {
                 delete data.name;
@@ -56,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const endpoint = isLogin ? '/api/login' : '/api/register';
-            
+
             try {
                 const response = await fetch(endpoint, {
                     method: 'POST',
@@ -69,7 +73,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (response.ok) {
                     const user = result.user;
 
-                    // Persist current user and saved accounts list
                     localStorage.setItem('user', JSON.stringify(user));
                     const savedUsers = JSON.parse(localStorage.getItem('savedUsers') || '[]');
                     const existingIndex = savedUsers.findIndex(s => s.id === user.id || s.email === user.email || s.name === user.name);
@@ -79,16 +82,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         savedUsers[existingIndex] = user;
                     }
                     localStorage.setItem('savedUsers', JSON.stringify(savedUsers));
-                    
-                    // Redirect everyone to index.html (the dashboard handles the rest)
+
                     window.location.href = 'index.html';
                 } else {
-                    alert(result.error || "Authentication failed");
-                    resetButton();
+                    authError && (authError.innerText = result.error || 'Authentication failed');
+                    authError?.classList.remove('hidden');
+                    window.hidePageLoader && window.hidePageLoader();
                 }
             } catch (err) {
-                console.error("Auth Error:", err);
-                alert("Connection lost. Is your server running?");
+                console.error('Auth Error:', err);
+                authError && (authError.innerText = 'Connection issue, try again.');
+                authError?.classList.remove('hidden');
+                window.hidePageLoader && window.hidePageLoader();
+            } finally {
                 resetButton();
             }
         });
@@ -97,6 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function resetButton() {
         submitBtn.disabled = false;
         submitBtn.innerText = isLogin ? "Login" : "Register";
+        window.hidePageLoader && window.hidePageLoader();
     }
 
 });
