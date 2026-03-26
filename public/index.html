@@ -449,7 +449,7 @@
                 `;
 
                 document.getElementById('sidebar-profile-box').innerHTML = `
-                    <div class="flex items-center gap-4 bg-gray-50 p-4 rounded-[2rem] border cursor-pointer hover:bg-gray-100 transition" onclick="window.location.href='profile.html'">
+                    <div class="flex items-center gap-4 bg-gray-50 p-4 rounded-[2rem] border">
                         <div class="w-12 h-12 ${user.role === 'admin' ? 'bg-indigo-600' : 'bg-black'} rounded-2xl flex items-center justify-center text-white">
                             <i class="fa-solid ${user.role === 'admin' ? 'fa-user-shield' : 'fa-user'}"></i>
                         </div>
@@ -457,7 +457,6 @@
                             <p class="text-[9px] font-black text-indigo-500 uppercase leading-none">${user.role}</p>
                             <p class="text-sm font-bold text-gray-800">${user.name}</p>
                         </div>
-                        <i class="fa-solid fa-chevron-right text-gray-400 text-sm"></i>
                     </div>
                 `;
 
