@@ -502,12 +502,14 @@
             const notifBadge = document.getElementById('notif-badge');
             if (!notifItems || !notifBadge) return;
 
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
             const today = new Date();
             today.setHours(0, 0, 0, 0);
 
             let alerts = [];
             const dismissedRooms = JSON.parse(localStorage.getItem('dismissed-alert-rooms') || '[]');
 
+            // Add payment due alerts
             myActiveRooms.forEach(room => {
                 const moveInDate = new Date(room.start_date);
                 const dueDate = new Date(moveInDate);
@@ -526,57 +528,72 @@
                         title: isUrgent ? 'Action Required' : 'Payment Upcoming',
                         text: `Rent for ${room.room_name} is ${statusText}.`,
                         color: isUrgent ? 'red' : 'amber',
-                        room_name: room.room_name
+                        room_name: room.room_name,
+                        type: 'payment'
                     });
                 }
             });
 
+            // Cache payment alerts immediately (synchronous)
+            cachedAlerts = [...alerts];
+
+            // Fetch booking status notifications asynchronously
             (async () => {
+                try {
+                    if (user.id) {
+                        const notifRes = await fetch(`/api/notifications/${user.id}?t=${Date.now()}`);
+                        const notifications = await notifRes.json();
+                        
+                        // Add approval/rejection notifications to alerts
+                        notifications.forEach(notif => {
+                            alerts.unshift({
+                                title: notif.status === 'Approved' ? 'Booking Approved ✓' : 'Booking Rejected ✗',
+                                text: `Your booking for <strong>${notif.room_name}</strong> (${notif.room_type}) has been ${notif.status.toLowerCase()}.`,
+                                color: notif.status === 'Approved' ? 'green' : 'red',
+                                type: 'booking_status',
+                                notification_id: notif.id
+                            });
+                        });
+
+                        // Update cache with complete alerts
+                        cachedAlerts = [...alerts];
+                    }
+                } catch (err) {
+                    console.error('Error fetching notifications:', err);
+                }
+
                 const badgeViewed = await isBadgeViewed();
                 if (alerts.length > 0 && !badgeViewed) {
                     notifBadge.classList.remove('hidden');
-                    notifItems.innerHTML = alerts.map(a => `
-                        <div class="p-4 rounded-2xl bg-${a.color}-50 border border-${a.color}-100 flex justify-between items-start gap-3">
-                            <div class="flex-1">
-                                <p class="text-[10px] font-black uppercase text-${a.color}-600 tracking-widest mb-1">
-                                    ${a.title}
-                                </p>
-                                <p class="text-[11px] font-bold text-gray-800 leading-tight">
-                                    ${a.text}
-                                </p>
-                            </div>
-                            <button onclick="dismissAlert('${a.room_name}')" class="flex-shrink-0 text-${a.color}-400 hover:text-${a.color}-600 transition">
-                                <i class="fa-solid fa-times text-sm"></i>
-                            </button>
-                        </div>
-                    `).join('');
                 } else {
                     notifBadge.classList.add('hidden');
-                    notifItems.innerHTML = alerts.length > 0 
-                        ? alerts.map(a => `
-                            <div class="p-4 rounded-2xl bg-${a.color}-50 border border-${a.color}-100 flex justify-between items-start gap-3">
-                                <div class="flex-1">
-                                    <p class="text-[10px] font-black uppercase text-${a.color}-600 tracking-widest mb-1">
-                                        ${a.title}
-                                    </p>
-                                    <p class="text-[11px] font-bold text-gray-800 leading-tight">
-                                        ${a.text}
-                                    </p>
-                                </div>
-                                <button onclick="dismissAlert('${a.room_name}')" class="flex-shrink-0 text-${a.color}-400 hover:text-${a.color}-600 transition">
-                                    <i class="fa-solid fa-times text-sm"></i>
-                                </button>
-                            </div>
-                        `).join('')
-                        : `<div class="p-10 text-center opacity-30 text-[10px] font-black uppercase italic">No new alerts</div>`;
+                }
+
+                // Render alerts using renderNotificationHTML
+                if (alerts.length > 0) {
+                    notifItems.innerHTML = alerts.map((a) => renderNotificationHTML(a)).join('');
+                } else {
+                    notifItems.innerHTML = `<div class="p-10 text-center opacity-30 text-[10px] font-black uppercase italic">No new alerts</div>`;
                 }
             })();
+        }
+
+        function dismissNotification(roomName, notifId) {
+            if (roomName) {
+                dismissAlert(roomName);
+            }
+            if (notifId) {
+                // Mark notification as read (optional, can add API call later)
+                console.log('Dismissed notification:', notifId);
+            }
         }
 
         function toggleSidebar() {
             document.getElementById('sidebar-drawer').classList.toggle('translate-x-full');
             document.getElementById('sidebar-overlay').classList.toggle('active');
         }
+
+        let cachedAlerts = [];
 
         function toggleDropdown(e, id) {
             e.stopPropagation();
@@ -588,7 +605,110 @@
                 markBadgeAsViewed();
                 const badge = document.getElementById('notif-badge');
                 if (badge) badge.classList.add('hidden');
+                // Display cached notifications immediately (no delay)
+                const notifItems = document.getElementById('notif-items');
+                if (notifItems && cachedAlerts.length > 0) {
+                    notifItems.innerHTML = cachedAlerts.map((a) => renderNotificationHTML(a)).join('');
+                }
+                // Then refresh notifications in the background
+                const user = JSON.parse(localStorage.getItem('user') || '{}');
+                if (user.id) {
+                    loadAndDisplayNotifications(user);
+                }
             }
+        }
+
+        async function loadAndDisplayNotifications(user) {
+            const notifItems = document.getElementById('notif-items');
+            if (!notifItems) return;
+
+            try {
+                const res = await fetch('/api/admin/bookings?t=' + Date.now());
+                const bookings = await res.json();
+                const myActiveRooms = bookings.filter(b => b.status === 'Approved' && b.user_name === user.name);
+                
+                let alerts = [];
+                const today = new Date();
+                today.setHours(0,0,0,0);
+                const dismissedRooms = JSON.parse(localStorage.getItem('dismissed-alert-rooms') || '[]');
+
+                // Add payment due alerts
+                myActiveRooms.forEach(room => {
+                    const moveInDate = new Date(room.start_date);
+                    const dueDate = new Date(moveInDate);
+                    dueDate.setMonth(moveInDate.getMonth() + 1);
+                    dueDate.setHours(0,0,0,0);
+
+                    const timeDiff = dueDate - today;
+                    const daysLeft = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+
+                    if (daysLeft <= 5 && !dismissedRooms.includes(room.room_name)) {
+                        const isUrgent = daysLeft <= 0;
+                        const statusText = daysLeft === 0 ? 'due today' : (daysLeft < 0 ? 'overdue' : 'due in ' + daysLeft + ' days');
+                        
+                        alerts.push({
+                            title: isUrgent ? 'Action Required' : 'Payment Upcoming',
+                            text: `Rent for ${room.room_name} is ${statusText}.`,
+                            color: isUrgent ? 'red' : 'amber',
+                            room_name: room.room_name,
+                            type: 'payment'
+                        });
+                    }
+                });
+
+                // Fetch booking status notifications
+                try {
+                    const notifRes = await fetch(`/api/notifications/${user.id}?t=${Date.now()}`);
+                    const notifications = await notifRes.json();
+                    
+                    // Add approval/rejection notifications to alerts (at the top)
+                    notifications.forEach(notif => {
+                        alerts.unshift({
+                            title: notif.status === 'Approved' ? 'Booking Approved ✓' : 'Booking Rejected ✗',
+                            text: `Your booking for <strong>${notif.room_name}</strong> (${notif.room_type}) has been ${notif.status.toLowerCase()}.`,
+                            color: notif.status === 'Approved' ? 'green' : 'red',
+                            type: 'booking_status',
+                            notification_id: notif.id
+                        });
+                    });
+                } catch (err) {
+                    console.error('Error fetching notifications:', err);
+                }
+
+                // Cache alerts for instant display on next bell click
+                cachedAlerts = alerts;
+
+                // Render notifications with proper Tailwind colors
+                if (alerts.length > 0) {
+                    notifItems.innerHTML = alerts.map((a) => renderNotificationHTML(a)).join('');
+                } else {
+                    notifItems.innerHTML = `<div class="p-10 text-center opacity-30 text-[10px] font-black uppercase italic">No new alerts</div>`;
+                }
+            } catch (err) {
+                console.error('Error loading notifications:', err);
+            }
+        }
+
+        function renderNotificationHTML(a) {
+            const colorMap = {
+                'red': 'bg-red-50 border-red-100 text-red-600',
+                'green': 'bg-green-50 border-green-100 text-green-600',
+                'amber': 'bg-amber-50 border-amber-100 text-amber-600'
+            };
+            const styles = colorMap[a.color] || colorMap['amber'];
+            const [bgColor, borderColor, textColor] = styles.split(' ');
+
+            return `
+                <div class="p-4 rounded-2xl ${bgColor} border ${borderColor} flex justify-between items-start gap-3">
+                    <div class="flex-1">
+                        <p class="text-[10px] font-black uppercase ${textColor} tracking-widest mb-1">${a.title}</p>
+                        <p class="text-[11px] font-bold text-gray-800 leading-tight">${a.text}</p>
+                    </div>
+                    <button onclick="dismissNotification('${a.room_name || ''}', '${a.notification_id || ''}')" class="flex-shrink-0 text-gray-400 hover:text-gray-600 transition">
+                        <i class="fa-solid fa-times text-sm"></i>
+                    </button>
+                </div>
+            `;
         }
 
         function logout() { localStorage.removeItem('user'); window.location.href = 'auth.html'; }

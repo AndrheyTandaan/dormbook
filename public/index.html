@@ -504,10 +504,32 @@
                             title: isUrgent ? 'Action Required' : 'Payment Upcoming',
                             text: `Rent for ${room.room_name} is ${statusText}.`,
                             color: isUrgent ? 'red' : 'amber',
-                            room_name: room.room_name
+                            room_name: room.room_name,
+                            type: 'payment'
                         });
                     }
                 });
+
+                // Fetch booking status notifications
+                try {
+                    if (user.id) {
+                        const notifRes = await fetch(`/api/notifications/${user.id}?t=${Date.now()}`);
+                        const notifications = await notifRes.json();
+                        
+                        // Add approval/rejection notifications to alerts (at the top)
+                        notifications.forEach(notif => {
+                            alerts.unshift({
+                                title: notif.status === 'Approved' ? 'Booking Approved ✓' : 'Booking Rejected ✗',
+                                text: `Your booking for <strong>${notif.room_name}</strong> (${notif.room_type}) has been ${notif.status.toLowerCase()}.`,
+                                color: notif.status === 'Approved' ? 'green' : 'red',
+                                type: 'booking_status',
+                                notification_id: notif.id
+                            });
+                        });
+                    }
+                } catch (err) {
+                    console.error('Error fetching notifications:', err);
+                }
 
                 if (alerts.length > 0 && !badgeViewed) {
                     badge.classList.remove('hidden');
@@ -521,7 +543,7 @@
                                     ${a.text}
                                 </p>
                             </div>
-                            <button onclick="dismissAlert('${a.room_name}')" class="flex-shrink-0 text-${a.color}-400 hover:text-${a.color}-600 transition">
+                            <button onclick="dismissNotificationAlert('${a.room_name || ''}', '${a.notification_id || ''}')" class="flex-shrink-0 text-${a.color}-400 hover:text-${a.color}-600 transition">
                                 <i class="fa-solid fa-times text-sm"></i>
                             </button>
                         </div>
@@ -539,7 +561,7 @@
                                         ${a.text}
                                     </p>
                                 </div>
-                                <button onclick="dismissAlert('${a.room_name}')" class="flex-shrink-0 text-${a.color}-400 hover:text-${a.color}-600 transition">
+                                <button onclick="dismissNotificationAlert('${a.room_name || ''}', '${a.notification_id || ''}')" class="flex-shrink-0 text-${a.color}-400 hover:text-${a.color}-600 transition">
                                     <i class="fa-solid fa-times text-sm"></i>
                                 </button>
                             </div>
@@ -547,6 +569,15 @@
                         : `<div class="p-10 text-center opacity-30 text-[10px] font-black uppercase italic">No new alerts</div>`;
                 }
             } catch (err) { console.error("Error checking alerts:", err); }
+        }
+
+        function dismissNotificationAlert(roomName, notifId) {
+            if (roomName) {
+                dismissAlert(roomName);
+            }
+            if (notifId) {
+                console.log('Dismissed notification:', notifId);
+            }
         }
 
         async function loadRooms() {

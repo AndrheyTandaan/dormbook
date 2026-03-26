@@ -423,10 +423,13 @@ app.get('/api/users/:id/notif-badge-status', async (req, res) => {
         const { id } = req.params;
         const userDoc = await db.collection('users').doc(id).get();
         if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+
         const userData = userDoc.data();
+        const viewed = !!userData.notif_badge_viewed_at;
+
         res.json({
-            viewed: userData.notif_badge_viewed_at !== null,
-            viewed_at: userData.notif_badge_viewed_at
+            viewed,
+            viewed_at: userData.notif_badge_viewed_at ? (userData.notif_badge_viewed_at.toDate ? userData.notif_badge_viewed_at.toDate().toISOString() : new Date(userData.notif_badge_viewed_at).toISOString()) : null
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -756,12 +759,67 @@ app.patch('/api/bookings/:id/status', async (req, res) => {
         }
 
         await db.collection('bookings').doc(id).update({ status });
+        
+        // Create notification for user when booking is approved or rejected
+        if (status === 'Approved' || status === 'Rejected') {
+            try {
+                await db.collection('notifications').add({
+                    user_id: bookingData.user_id,
+                    booking_id: id,
+                    room_name: bookingData.room_name,
+                    room_type: bookingData.room_type || 'Standard Room',
+                    status: status,
+                    message: status === 'Approved' 
+                        ? `Your booking for ${bookingData.room_name} has been approved!`
+                        : `Your booking for ${bookingData.room_name} has been rejected.`,
+                    read: false,
+                    created_at: admin.firestore.FieldValue.serverTimestamp()
+                });
+
+                // Reset the badge-viewed marker so all pages show red dot until viewed again
+                await db.collection('users').doc(bookingData.user_id).update({
+                    notif_badge_viewed_at: null
+                });
+
+                console.log(`Notification created for user ${bookingData.user_id} for ${status} booking`);
+            } catch (notifErr) {
+                console.error('Error creating notification or resetting badge status:', notifErr);
+            }
+        }
+        
         logAction(adminName, `Updated booking status for ${userName} (${bookingData.room_name}) to ${status}`);
 
         return res.status(200).json({ success: true, message: 'Status updated' });
     } catch (error) {
         console.error('Booking status update error:', error);
         return res.status(500).json({ error: error.message || 'Server error' });
+    }
+});
+
+app.get('/api/notifications/:userId', async (req, res) => {
+    try {
+        const userId = req.params.userId;
+        const notificationsSnapshot = await db.collection('notifications')
+            .where('user_id', '==', userId)
+            .get();
+
+        const notifications = notificationsSnapshot.docs
+            .map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }))
+            .sort((a, b) => {
+                // Sort by created_at timestamp in descending order (most recent first)
+                const aTime = a.created_at?._seconds || 0;
+                const bTime = b.created_at?._seconds || 0;
+                return bTime - aTime;
+            })
+            .slice(0, 50); // Limit to 50 most recent
+
+        res.json(notifications || []);
+    } catch (error) {
+        console.error('Error fetching notifications:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
