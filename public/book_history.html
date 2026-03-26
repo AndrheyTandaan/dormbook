@@ -283,11 +283,12 @@
             if (user.role === 'admin') {
                 titleEl.innerText = "Global History";
                 subtitleEl.innerText = "History of all processed student applications";
-                clearBtn.innerHTML = '<i class="fa-solid fa-trash"></i> Clear All Bookings';
+                clearBtn.style.display = 'none'; // Hide clear button for admin
             } else {
                 titleEl.innerText = "My Bookings";
                 subtitleEl.innerText = "View and manage your reservations";
                 clearBtn.innerHTML = '<i class="fa-solid fa-trash"></i> Clear My History';
+                clearBtn.style.display = 'flex'; // Ensure button is visible for regular users
             }
 
             try {
