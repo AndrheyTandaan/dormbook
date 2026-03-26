@@ -68,6 +68,7 @@
                         <tr>
                             <th class="px-4 py-3">User Name</th>
                             <th class="px-4 py-3">Booked Room</th>
+                            <th class="px-4 py-3">Paid</th>
                             <th class="px-4 py-3">Due Date</th>
                             <th class="px-4 py-3">Balance</th>
                             <th class="px-4 py-3">Duration</th>
@@ -114,7 +115,8 @@
                     return `
                         <tr class="border-b border-gray-100 hover:bg-indigo-50/30 transition-all">
                             <td class="px-4 py-3 text-gray-800">${booking.user_name || 'Unknown'}</td>
-                            <td class="px-4 py-3 text-gray-800">${booking.room_name || 'N/A'}</td>
+                                    <td class="px-4 py-3 text-gray-800">${booking.room_name || 'N/A'}</td>
+                            <td class="px-4 py-3 text-gray-800">₱${amountPaid.toLocaleString('en-PH')}</td>
                             <td class="px-4 py-3 text-gray-800">${dueDateText}</td>
                             <td class="px-4 py-3 text-gray-800">${balanceText}</td>
                             <td class="px-4 py-3 text-gray-800">${durationText}</td>

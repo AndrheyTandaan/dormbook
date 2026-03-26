@@ -337,6 +337,32 @@ app.put('/api/users/:id/profile', async (req, res) => {
     }
 });
 
+// Profile image upload route
+app.post('/api/users/:id/upload-profile-image', uploadProfile.single('profileImage'), async (req, res) => {
+    const { id } = req.params;
+
+    if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    try {
+        // Update user's profile_image in Firestore
+        const userRef = db.collection('users').doc(id);
+        const userDoc = await userRef.get();
+        if (!userDoc.exists) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const imagePath = `/uploads/profiles/${req.file.filename}`;
+        await userRef.update({ profile_image: imagePath });
+
+        res.json({ success: true, message: 'Profile image uploaded successfully', imagePath });
+    } catch (err) {
+        console.error('Profile image upload error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
 // --- USER MANAGEMENT ROUTES ---
 app.get('/api/admin/users', async (req, res) => {
     try {
@@ -354,6 +380,7 @@ app.get('/api/admin/users', async (req, res) => {
                 name: userData.name,
                 email: userData.email,
                 role: userData.role,
+                profile_image: userData.profile_image || null,
                 created_at: createdAtISO
             };
         });
@@ -386,6 +413,7 @@ app.get('/api/users/:id', async (req, res) => {
             name: userData.name,
             email: userData.email,
             role: userData.role,
+            profile_image: userData.profile_image || null,
             created_at: createdAtISO,
             last_login: lastLoginISO
         });

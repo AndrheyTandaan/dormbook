@@ -83,13 +83,26 @@
             <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Update your account information</p>
         </div>
 
-        <input type="file" id="file input"/>
-        <img id="preview" src="" alt="Image Preview" style="display:none; max-width:200px; margin-top:10px;"/>
-        <button id="upload-btn">Upload Image</button>
-        <button id="crop">Crop Image</button>
-
         <div class="glass-card p-8 rounded-[3rem] mb-8">
             <form id="profile-form" class="space-y-6">
+                <div class="space-y-4">
+                    <h3 class="text-lg font-bold text-gray-800 uppercase tracking-widest">Profile Picture</h3>
+                    <div class="flex items-center gap-6">
+                        <div class="relative">
+                            <img id="preview" src="" alt="Profile Preview" class="w-24 h-24 rounded-full border-4 border-gray-200 object-cover" style="display:none;"/>
+                            <div id="default-avatar" class="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center">
+                                <i class="fa-solid fa-user text-gray-400 text-2xl"></i>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            <input type="file" id="file-input" accept="image/*" class="hidden"/>
+                            <label for="file-input" class="inline-block bg-indigo-600 text-white py-2 px-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition cursor-pointer">Choose Image</label>
+                            <button type="button" id="upload-btn" class="block bg-green-600 text-white py-2 px-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-green-700 transition">Upload Image</button>
+                            <button type="button" id="crop-btn" class="block bg-gray-600 text-white py-2 px-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-gray-700 transition">Crop Image</button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="space-y-1">
                         <label class="block text-[10px] font-black uppercase text-gray-400 mb-1 ml-1 tracking-widest">Full Name</label>
@@ -152,6 +165,18 @@
                     const userData = await res.json();
                     document.getElementById('name-input').value = userData.name;
                     document.getElementById('email-input').value = userData.email;
+
+                    const preview = document.getElementById('preview');
+                    const defaultAvatar = document.getElementById('default-avatar');
+
+                    if (userData.profile_image) {
+                        preview.src = userData.profile_image;
+                        preview.style.display = 'block';
+                        defaultAvatar.style.display = 'none';
+                    } else {
+                        preview.style.display = 'none';
+                        defaultAvatar.style.display = 'flex';
+                    }
                 }
             } catch (err) {
                 console.error('Failed to load user profile:', err);
@@ -209,6 +234,59 @@
                 saveBtn.disabled = false;
                 saveBtn.innerText = originalText;
             }
+        });
+
+        // Handle file input change for preview
+        document.getElementById('file-input').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            const preview = document.getElementById('preview');
+            const defaultAvatar = document.getElementById('default-avatar');
+
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                    defaultAvatar.style.display = 'none';
+                };
+                reader.readAsDataURL(file);
+            } else {
+                preview.style.display = 'none';
+                defaultAvatar.style.display = 'flex';
+            }
+        });
+
+        // Handle upload button
+        document.getElementById('upload-btn').addEventListener('click', async function() {
+            const fileInput = document.getElementById('file-input');
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Please select an image first.');
+                return;
+            }
+            const formData = new FormData();
+            formData.append('profileImage', file);
+            const user = JSON.parse(localStorage.getItem('user'));
+            try {
+                const res = await fetch(`/api/users/${user.id}/upload-profile-image`, {
+                    method: 'POST',
+                    body: formData
+                });
+                if (res.ok) {
+                    alert('Profile image uploaded successfully!');
+                    // Optionally reload the page or update UI
+                } else {
+                    alert('Failed to upload image.');
+                }
+            } catch (err) {
+                console.error('Upload error:', err);
+                alert('Connection error.');
+            }
+        });
+
+        // Crop functionality not implemented yet
+        document.getElementById('crop-btn').addEventListener('click', function() {
+            alert('Crop functionality is not implemented yet.');
         });
     </script>
     <script src="page-loader.js"></script>

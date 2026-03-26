@@ -255,9 +255,13 @@
                 <tr class="border-b border-gray-50 hover:bg-white/50 transition">
                     <td class="px-8 py-6">
                         <div class="flex items-center gap-4">
-                            <div class="w-10 h-10 rounded-xl ${user.role === 'admin' ? 'bg-indigo-600 text-white' : 'bg-gray-900 text-white'} flex items-center justify-center font-black shadow-lg">
-                                ${(user.name || 'U').charAt(0).toUpperCase()}
-                            </div>
+                            ${user.profile_image ? `
+                                <img src="${user.profile_image}" alt="${user.name || 'User'}" class="w-10 h-10 rounded-full object-cover border border-gray-100 shadow" />
+                            ` : `
+                                <div class="w-10 h-10 rounded-full ${user.role === 'admin' ? 'bg-indigo-600 text-white' : 'bg-gray-900 text-white'} flex items-center justify-center font-black shadow-lg">
+                                    ${(user.name || 'U').charAt(0).toUpperCase()}
+                                </div>
+                            `}
                             <div>
                                 <p class="text-sm font-black uppercase tracking-tight">${user.name || 'Unknown User'}</p>
                                 <p class="text-[10px] font-bold text-gray-400">${user.email || 'No Email'}</p>
