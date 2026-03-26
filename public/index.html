@@ -245,6 +245,7 @@
         const DOWNPAYMENT_PERCENT = 0.15;
         let currentRoom = null;
         let allRooms = [];
+        let roomCounts = {};
 
         function getCapacity(roomType) {
             if (roomType.includes('1 Person')) return 1;
@@ -263,6 +264,12 @@
                 await loadAdminAnalytics();
             }
             window.hidePageLoader();
+
+            // Add search functionality
+            const searchInput = document.getElementById('search-input');
+            const filterBtn = document.getElementById('filter-btn');
+            if (searchInput) searchInput.addEventListener('input', applyFilters);
+            if (filterBtn) filterBtn.addEventListener('click', applyFilters);
         });
 
         function setupNavbar() {
@@ -551,46 +558,74 @@
                 const bookingsRes = await fetch('/api/admin/bookings?t=' + Date.now());
                 const bookings = await bookingsRes.json();
                 const approvedBookings = bookings.filter(b => b.status === 'Approved');
-                const roomCounts = {};
+                roomCounts = {};
                 approvedBookings.forEach(b => {
                     const roomName = b.room_name.toLowerCase();
                     roomCounts[roomName] = (roomCounts[roomName] || 0) + 1;
                 });
 
-                container.innerHTML = rooms.map((room, index) => {
-                    const capacity = getCapacity(room.room_type);
-                    const roomCount = roomCounts[room.name.toLowerCase()] || 0;
-                    const isFull = roomCount >= capacity;
-                    const btn = (user && user.role === 'admin') 
-                        ? `<button onclick="window.location.href='management.html#inventory-section'" class="w-full bg-gray-800 text-white py-4 rounded-2xl text-xs font-black uppercase">Manage</button>`
-                        : isFull 
-                        ? `<button disabled class="w-full bg-gray-400 text-white py-4 rounded-2xl text-xs font-black uppercase cursor-not-allowed">Fully Booked</button>`
-                        : `<button onclick="openModal(${index})" class="w-full bg-indigo-600 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest">Book Now</button>`;
-                    
-                    return `
-                        <div class="glass-card rounded-[2.5rem] overflow-hidden group">
-                            <div class="h-64 relative overflow-hidden">
-                                <img src="${room.image_url}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700">
-                                <div class="absolute top-5 left-5 bg-indigo-600 text-white px-4 py-2 rounded-2xl shadow-lg">
-                                    <p class="text-[10px] font-black uppercase tracking-widest">${room.room_type || 'Room'}</p>
-                                </div>
-                                <div class="absolute top-5 right-5 bg-white/90 backdrop-blur px-4 py-2 rounded-2xl">
-                                    <p class="text-xs font-black text-indigo-600 uppercase">₱${room.price.toLocaleString()}/mo</p>
-                                </div>
-                                ${isFull ? `<div class="absolute inset-0 bg-black/50 flex items-center justify-center"><span class="text-white text-lg font-black uppercase">Occupied</span></div>` : ''}
-                            </div>
-                            <div class="p-8">
-                                <h3 class="text-xl font-black uppercase mb-2">${room.name}</h3>
-                                <p class="text-gray-500 text-xs font-bold uppercase mb-6">${room.description.substring(0, 60)}...</p>
-                                ${btn}
-                            </div>
-                        </div>`;
-                }).join('');
+                renderRooms(allRooms);
             } catch (err) { container.innerHTML = `<p class="text-center py-20 text-xs font-black uppercase">Error loading rooms...</p>`; }
         }
 
-        function openModal(index) {
-            currentRoom = allRooms[index];
+        function renderRooms(rooms) {
+            const container = document.getElementById('dorm-container');
+            const user = JSON.parse(localStorage.getItem('user'));
+            container.innerHTML = rooms.map((room, index) => {
+                const capacity = getCapacity(room.room_type);
+                const roomCount = roomCounts[room.name.toLowerCase()] || 0;
+                const isFull = roomCount >= capacity;
+                const btn = (user && user.role === 'admin') 
+                    ? `<button onclick="window.location.href='management.html#inventory-section'" class="w-full bg-gray-800 text-white py-4 rounded-2xl text-xs font-black uppercase">Manage</button>`
+                    : isFull 
+                    ? `<button disabled class="w-full bg-gray-400 text-white py-4 rounded-2xl text-xs font-black uppercase cursor-not-allowed">Fully Booked</button>`
+                    : `<button onclick="openModal('${room.name}')" class="w-full bg-indigo-600 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest">Book Now</button>`;
+                
+                return `
+                    <div class="glass-card rounded-[2.5rem] overflow-hidden group">
+                        <div class="h-64 relative overflow-hidden">
+                            <img src="${room.image_url}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700">
+                            <div class="absolute top-5 left-5 bg-indigo-600 text-white px-4 py-2 rounded-2xl shadow-lg">
+                                <p class="text-[10px] font-black uppercase tracking-widest">${room.room_type || 'Room'}</p>
+                            </div>
+                            <div class="absolute top-5 right-5 bg-white/90 backdrop-blur px-4 py-2 rounded-2xl">
+                                <p class="text-xs font-black text-indigo-600 uppercase">₱${room.price.toLocaleString()}/mo</p>
+                            </div>
+                            ${isFull ? `<div class="absolute inset-0 bg-black/50 flex items-center justify-center"><span class="text-white text-lg font-black uppercase">Occupied</span></div>` : ''}
+                        </div>
+                        <div class="p-8">
+                            <h3 class="text-xl font-black uppercase mb-2">${room.name}</h3>
+                            <p class="text-gray-500 text-xs font-bold uppercase mb-6">${room.description.substring(0, 60)}...</p>
+                            ${btn}
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        function applyFilters() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+
+            let filtered = allRooms.filter(room => {
+                const matchesName = room.name.toLowerCase().includes(searchTerm);
+                return matchesName;
+            });
+
+            // Sort so that names starting with the search term appear first
+            if (searchTerm) {
+                filtered.sort((a, b) => {
+                    const aStarts = a.name.toLowerCase().startsWith(searchTerm);
+                    const bStarts = b.name.toLowerCase().startsWith(searchTerm);
+                    if (aStarts && !bStarts) return -1;
+                    if (!aStarts && bStarts) return 1;
+                    return 0;
+                });
+            }
+
+            renderRooms(filtered);
+        }
+
+        function openModal(roomName) {
+            currentRoom = allRooms.find(room => room.name === roomName);
             currentRoomPrice = currentRoom.price;
             document.getElementById('modal-room-name').innerText = currentRoom.name;
             document.getElementById('modal-room-desc').innerText = currentRoom.description;

@@ -7,12 +7,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Event Listeners for Filtering
     document.getElementById('filter-btn').addEventListener('click', applyFilters);
-    
-    document.getElementById('reset-btn').addEventListener('click', () => {
-        document.getElementById('search-input').value = '';
-        document.getElementById('price-filter').value = 'all';
-        renderDorms(allDorms);
-    });
 
     // Real-time search as you type
     const searchInput = document.getElementById('search-input');
@@ -31,20 +25,22 @@ async function loadDorms() {
 
 function applyFilters() {
     const searchTerm = document.getElementById('search-input').value.toLowerCase();
-    const priceRange = document.getElementById('price-filter').value;
 
-    const filtered = allDorms.filter(dorm => {
+    let filtered = allDorms.filter(dorm => {
         const matchesName = dorm.name.toLowerCase().includes(searchTerm);
-        
-        const numericPrice = parseInt(dorm.price.toString().replace(/[^0-9]/g, '')) || 0;
-        let matchesPrice = true;
-
-        if (priceRange === 'low') matchesPrice = numericPrice < 5000;
-        else if (priceRange === 'mid') matchesPrice = numericPrice >= 5000 && numericPrice <= 8000;
-        else if (priceRange === 'high') matchesPrice = numericPrice > 8000;
-
-        return matchesName && matchesPrice;
+        return matchesName;
     });
+
+    // Sort so that names starting with the search term appear first
+    if (searchTerm) {
+        filtered.sort((a, b) => {
+            const aStarts = a.name.toLowerCase().startsWith(searchTerm);
+            const bStarts = b.name.toLowerCase().startsWith(searchTerm);
+            if (aStarts && !bStarts) return -1;
+            if (!aStarts && bStarts) return 1;
+            return 0;
+        });
+    }
 
     renderDorms(filtered);
 }
