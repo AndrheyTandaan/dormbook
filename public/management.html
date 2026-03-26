@@ -171,13 +171,17 @@ function setupNavbar() {
     const user = JSON.parse(localStorage.getItem('user'));
     if (!user || user.role !== 'admin') { window.location.href = 'index.html'; return; }
 
+    const currentPage = window.location.pathname.split('/').pop().toLowerCase();
+    const isActive = (page) => page === currentPage;
+    const isPanelActive = ['panel_bookings.html', 'admin_panel.html', 'users.html'].includes(currentPage);
+
     const navCenter = document.getElementById('nav-center');
     const navRight = document.getElementById('nav-right');
 
     // Navbar center links
     navCenter.innerHTML = `
     <div class="flex items-center gap-8">
-        <a href="index.html" class="text-xs font-black text-gray-500 uppercase tracking-widest hover:text-indigo-600 transition">Home</a>
+        <a href="index.html" class="text-xs font-black uppercase tracking-widest ${isActive('index.html') ? 'text-indigo-600' : 'text-gray-500 hover:text-indigo-600'} transition">Home</a>
 
         <div class="relative">
             <button onclick="toggleDropdown(event,'management-dropdown')" class="text-xs font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
@@ -197,15 +201,18 @@ function setupNavbar() {
         </div>
 
         <div class="relative">
-            <button onclick="toggleDropdown(event,'panel-dropdown')" class="text-xs font-black text-gray-500 uppercase tracking-widest hover:text-indigo-600 flex items-center gap-2">
+            <button onclick="toggleDropdown(event,'panel-dropdown')" class="text-xs font-black uppercase tracking-widest ${isPanelActive ? 'text-indigo-600' : 'text-gray-500 hover:text-indigo-600'} flex items-center gap-2">
                 Panel <i class="fa-solid fa-chevron-down text-[10px]"></i>
             </button>
             <div id="panel-dropdown" class="dropdown-menu absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 overflow-hidden">
-                <a href="admin_panel.html#add-dorm-form-container" class="block px-5 py-4 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                <a href="admin_panel.html#add-dorm-form-container" class="block px-5 py-4 text-[10px] font-black uppercase ${isActive('admin_panel.html') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:bg-gray-50 hover:text-indigo-600'} transition border-b border-gray-50">
                     <i class="fa-solid fa-circle-plus mr-2 text-sm text-indigo-500"></i> Add New Room
                 </a>
-                <a href="users.html" class="block px-5 py-4 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                <a href="users.html" class="block px-5 py-4 text-[10px] font-black uppercase ${isActive('users.html') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:bg-gray-50 hover:text-indigo-600'} transition border-b border-gray-50">
                     <i class="fa-solid fa-users-gear mr-2 text-sm text-indigo-500"></i> User Management
+                </a>
+                <a href="panel_bookings.html" class="block px-5 py-4 text-[10px] font-black uppercase ${isActive('panel_bookings.html') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:bg-gray-50 hover:text-indigo-600'} transition">
+                    <i class="fa-solid fa-list-check mr-2 text-sm text-indigo-500"></i> Booking List
                 </a>
             </div>
         </div>
@@ -257,16 +264,19 @@ function setupNavbar() {
     </div>
 
     <div class="relative">
-        <button onclick="toggleDropdown(event, 'sidebar-panel')" class="w-full flex justify-between items-center p-4 rounded-2xl text-xs font-black uppercase tracking-widest text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 transition">
+        <button onclick="toggleDropdown(event, 'sidebar-panel')" class="w-full flex justify-between items-center p-4 rounded-2xl text-xs font-black uppercase tracking-widest ${isPanelActive ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:bg-indigo-50 hover:text-indigo-600'} transition">
             <span class="flex items-center gap-4"><i class="fa-solid fa-sliders w-4"></i> Panel</span>
             <i class="fa-solid fa-chevron-down text-[10px]"></i>
         </button>
         <div id="sidebar-panel" class="dropdown-menu w-full bg-white rounded-2xl shadow-sm border border-gray-100 py-2 mt-1 overflow-hidden">
-            <a href="admin_panel.html" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+            <a href="admin_panel.html" class="block px-5 py-3 text-[10px] font-black uppercase ${isActive('admin_panel.html') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:bg-gray-50 hover:text-indigo-600'} transition border-b border-gray-50">
                 <i class="fa-solid fa-circle-plus mr-2 text-sm text-indigo-500"></i> Add New Room
             </a>
-            <a href="users.html" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+            <a href="users.html" class="block px-5 py-3 text-[10px] font-black uppercase ${isActive('users.html') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:bg-gray-50 hover:text-indigo-600'} transition border-b border-gray-50">
                 <i class="fa-solid fa-users-gear mr-2 text-sm text-indigo-500"></i> User Management
+            </a>
+            <a href="panel_bookings.html" class="block px-5 py-3 text-[10px] font-black uppercase ${isActive('panel_bookings.html') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:bg-gray-50 hover:text-indigo-600'} transition">
+                <i class="fa-solid fa-list-check mr-2 text-sm text-indigo-500"></i> Booking List
             </a>
         </div>
     </div>

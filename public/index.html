@@ -323,13 +323,16 @@
                                     Panel <i class="fa-solid fa-chevron-down text-[10px]"></i>
                                 </button>
                                 <div id="panel-dropdown" class="dropdown-menu absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 overflow-hidden">
-                                    <a href="admin_panel.html" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
-                                        <i class="fa-solid fa-circle-plus mr-2 text-sm text-indigo-500"></i> Add New Room
-                                    </a>
-                                    <a href="users.html" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
-                                        <i class="fa-solid fa-users-gear mr-2 text-sm text-indigo-500"></i> User Management
-                                    </a>
-                                </div>
+                                <a href="admin_panel.html" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                                    <i class="fa-solid fa-circle-plus mr-2 text-sm text-indigo-500"></i> Add New Room
+                                </a>
+                                <a href="users.html" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                                    <i class="fa-solid fa-users-gear mr-2 text-sm text-indigo-500"></i> User Management
+                                </a>
+                                <a href="panel_bookings.html" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                                    <i class="fa-solid fa-list-check mr-2 text-sm text-indigo-500"></i> Booking List
+                                </a>
+                            </div>
                             </div>
                         `}
                         <a href="book_history.html" class="text-xs font-black text-gray-500 uppercase tracking-widest hover:text-indigo-600 transition">History</a>
@@ -411,8 +414,11 @@
                                 <a href="admin_panel.html" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
                                     <i class="fa-solid fa-circle-plus mr-2 text-sm text-indigo-500"></i> Add New Room
                                 </a>
-                                <a href="users.html" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                                <a href="users.html" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
                                     <i class="fa-solid fa-users-gear mr-2 text-sm text-indigo-500"></i> User Management
+                                </a>
+                                <a href="panel_bookings.html" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                                    <i class="fa-solid fa-list-check mr-2 text-sm text-indigo-500"></i> Booking List
                                 </a>
                             </div>
                         </div>
@@ -790,6 +796,60 @@
             }
         }
 
+        async function loadPanelBookings() {
+            const panelList = document.getElementById('panel-bookings-list');
+            const sidebarPanelList = document.getElementById('sidebar-panel-bookings-list');
+            const panelEmpty = document.getElementById('panel-bookings-empty');
+            const sidebarPanelEmpty = document.getElementById('sidebar-panel-bookings-empty');
+
+            if (!panelList && !sidebarPanelList) return;
+
+            try {
+                const res = await fetch('/api/admin/bookings?t=' + Date.now());
+                const bookings = await res.json();
+
+                if (!Array.isArray(bookings) || bookings.length === 0) {
+                    if (panelList) panelList.innerHTML = '';
+                    if (sidebarPanelList) sidebarPanelList.innerHTML = '';
+                    panelEmpty?.classList.remove('hidden');
+                    sidebarPanelEmpty?.classList.remove('hidden');
+                    return;
+                }
+
+                panelEmpty?.classList.add('hidden');
+                sidebarPanelEmpty?.classList.add('hidden');
+
+                const renderItem = (booking) => {
+                    const moveInDate = booking.start_date ? new Date(booking.start_date) : null;
+                    const dueDate = moveInDate ? new Date(moveInDate) : null;
+                    if (dueDate) dueDate.setMonth(dueDate.getMonth() + 1);
+
+                    const dueDateText = dueDate ? dueDate.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+                    const durationText = (booking.duration || 1) + ' Month' + ((booking.duration || 1) > 1 ? 's' : '');
+                    const balance = typeof booking.amount_paid === 'number' ? `₱${(booking.amount_paid).toLocaleString()}` : '₱0';
+                    const userName = booking.user_name || 'Unknown';
+                    const roomName = booking.room_name || 'Unknown';
+
+                    return `
+                        <div class="border border-gray-100 rounded-xl p-3 bg-gray-50">
+                            <p class="text-[10px] font-black uppercase text-gray-500 mb-1">${userName} • ${roomName}</p>
+                            <p class="text-[10px] text-gray-600">Due: <span class="font-bold">${dueDateText}</span></p>
+                            <p class="text-[10px] text-gray-600">Balance: <span class="font-bold">${balance}</span></p>
+                            <p class="text-[10px] text-gray-600">Duration: <span class="font-bold">${durationText}</span></p>
+                        </div>
+                    `;
+                };
+
+                const itemsHtml = bookings.slice(0, 8).map(renderItem).join('');
+                if (panelList) panelList.innerHTML = itemsHtml;
+                if (sidebarPanelList) sidebarPanelList.innerHTML = itemsHtml;
+            } catch (err) {
+                console.error('Error loading panel bookings:', err);
+                if (panelList) panelList.innerHTML = '<p class="text-[10px] text-red-500">Unable to load bookings</p>';
+                if (sidebarPanelList) sidebarPanelList.innerHTML = '<p class="text-[10px] text-red-500">Unable to load bookings</p>';
+            }
+        }
+
         function toggleSidebar() {
             document.getElementById('sidebar-drawer').classList.toggle('translate-x-full');
             document.getElementById('sidebar-overlay').classList.toggle('active');
@@ -799,11 +859,13 @@
             const target = document.getElementById(id);
             document.querySelectorAll('.dropdown-menu').forEach(m => { if(m !== target) m.classList.remove('show'); });
             target.classList.toggle('show');
-            // Mark badge as viewed and dismiss when notification dropdown opens
             if (id === 'notif-dropdown' && target.classList.contains('show')) {
                 markBadgeAsViewed();
                 const badge = document.getElementById('notif-badge');
                 if (badge) badge.classList.add('hidden');
+            }
+            if ((id === 'panel-dropdown' || id === 'sidebar-panel') && target.classList.contains('show')) {
+                loadPanelBookings();
             }
         }
         window.onclick = () => {

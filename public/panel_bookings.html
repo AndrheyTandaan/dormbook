@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Booking List | DormBook</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        html { scroll-behavior: smooth; overflow-y: scroll; scrollbar-gutter: stable; }
+        body { min-height: 100vh; background-color: #f9fafb; }
+        .dropdown-menu { display: none; transform-origin: top; animation: slideIn 0.2s ease-out; }
+        .dropdown-menu.show { display: block; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(-10px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
+        #sidebar-drawer { transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        #sidebar-overlay.active { opacity: 1; pointer-events: auto; }
+    </style>
+</head>
+<body class="text-gray-900">
+    <nav class="fixed top-0 left-0 right-0 flex justify-between items-center px-8 py-4 bg-white/90 backdrop-blur-md border-b z-50 min-h-16">
+        <div class="text-xl font-bold flex items-center gap-2 cursor-pointer" onclick="window.location.href='index.html'">
+            <i class="fa-solid fa-building-circle-check text-indigo-600"></i> DormBook
+        </div>
+        <div id="nav-center" class="absolute left-1/2 transform -translate-x-1/2 hidden md:flex gap-8 items-center"></div>
+        <div id="nav-right" class="flex justify-end items-center gap-4"></div>
+    </nav>
+
+    <div class="pt-20"></div>
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] opacity-0 pointer-events-none transition-opacity duration-300"></div>
+    <div id="sidebar-drawer" class="fixed top-0 right-0 h-full w-80 bg-white z-[70] shadow-2xl transform translate-x-full p-8 flex flex-col overflow-hidden">
+        <div class="flex justify-between items-center mb-8">
+            <span class="text-[10px] font-black uppercase text-gray-400 tracking-widest">Account</span>
+            <div class="flex gap-2">
+                <button onclick="toggleSidebar()" class="w-12 h-12 flex flex-col items-center justify-center bg-gray-100 rounded-2xl border hover:bg-gray-200 transition">
+                    <i class="fa-solid fa-xmark text-gray-500"></i>
+                </button>
+            </div>
+        </div>
+        <div id="sidebar-profile-box" class="mb-10"></div>
+        <div id="sidebar-links" class="space-y-2 flex-grow overflow-y-auto pr-2"></div>
+        <button onclick="logout()" class="w-full bg-red-50 text-red-600 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-100 transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-right-from-bracket"></i> Logout
+        </button>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-8 pb-20">
+        <div class="flex justify-between items-end py-10">
+            <div>
+                <h1 class="text-4xl font-black mb-2 tracking-tight uppercase">Booking List</h1>
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Admin panel view of current bookings</p>
+            </div>
+            <button onclick="location.reload()" class="bg-white border border-gray-200 px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-gray-50 transition shadow-sm">
+                <i class="fa-solid fa-rotate mr-2 text-indigo-600"></i> Refresh
+            </button>
+        </div>
+
+        <div class="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden">
+            <div class="p-6 border-b border-gray-100 flex items-center justify-between gap-4 flex-wrap">
+                <div class="text-sm font-bold uppercase tracking-widest text-gray-500">All Bookings</div>
+                <div class="flex items-center gap-2 text-xs text-gray-600">Most recent first</div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs font-semibold text-gray-700">
+                    <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-widest">
+                        <tr>
+                            <th class="px-4 py-3">User Name</th>
+                            <th class="px-4 py-3">Booked Room</th>
+                            <th class="px-4 py-3">Due Date</th>
+                            <th class="px-4 py-3">Balance</th>
+                            <th class="px-4 py-3">Duration</th>
+                            <th class="px-4 py-3">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="booking-table-body" class="bg-white">
+                        <tr><td colspan="6" class="px-6 py-8 text-center text-gray-400">Loading bookings...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadBookingsPage() {
+            const user = JSON.parse(localStorage.getItem('user'));
+            if (!user || user.role !== 'admin') {
+                window.location.href = 'index.html';
+                return;
+            }
+            setupNavbar();
+
+            const tbody = document.getElementById('booking-table-body');
+            try {
+                const res = await fetch('/api/admin/bookings?t=' + Date.now());
+                const data = await res.json();
+                if (!Array.isArray(data) || data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-gray-400">No bookings found</td></tr>';
+                    return;
+                }
+
+                const rows = data.map(booking => {
+                    const startDate = booking.start_date ? new Date(booking.start_date) : null;
+                    const dueDate = startDate ? new Date(startDate) : null;
+                    if (dueDate) dueDate.setMonth(dueDate.getMonth() + 1);
+                    const dueDateText = dueDate ? dueDate.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+                    const durationText = (booking.duration || 1) + ' Month' + ((booking.duration || 1) > 1 ? 's' : '');
+                    const amountPaid = Number(booking.amount_paid) || 0;
+                    const roomPrice = Number(booking.price) || 0;
+                    const balance = roomPrice - amountPaid;
+                    const balanceText = '₱' + (balance < 0 ? '0' : balance.toLocaleString('en-PH'));
+
+                    return `
+                        <tr class="border-b border-gray-100 hover:bg-indigo-50/30 transition-all">
+                            <td class="px-4 py-3 text-gray-800">${booking.user_name || 'Unknown'}</td>
+                            <td class="px-4 py-3 text-gray-800">${booking.room_name || 'N/A'}</td>
+                            <td class="px-4 py-3 text-gray-800">${dueDateText}</td>
+                            <td class="px-4 py-3 text-gray-800">${balanceText}</td>
+                            <td class="px-4 py-3 text-gray-800">${durationText}</td>
+                            <td class="px-4 py-3 text-gray-800">${booking.status || 'N/A'}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                tbody.innerHTML = rows;
+            } catch (err) {
+                console.error('Failed loading bookings', err);
+                tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-red-500">Unable to load bookings. Please try again later.</td></tr>';
+            }
+        }
+
+        function setupNavbar() {
+            const user = JSON.parse(localStorage.getItem('user'));
+            const navCenter = document.getElementById('nav-center');
+            const navRight = document.getElementById('nav-right');
+            const sidebarProfile = document.getElementById('sidebar-profile-box');
+            const sidebarLinks = document.getElementById('sidebar-links');
+
+            if (!user || user.role !== 'admin') {
+                window.location.href = 'index.html';
+                return;
+            }
+
+            const currentPage = window.location.pathname.split('/').pop().toLowerCase();
+            const isActive = (page) => page === currentPage;
+
+            navCenter.innerHTML = `
+                <div class="hidden lg:flex items-center gap-8">
+                    <a href="index.html" class="text-xs font-black uppercase tracking-widest ${isActive('index.html') ? 'text-indigo-600' : 'text-gray-500 hover:text-indigo-600'} transition">Home</a>
+                    <div class="relative">
+                        <button onclick="toggleDropdown(event, 'management-dropdown')" class="text-xs font-black uppercase tracking-widest ${isActive('management.html') ? 'text-indigo-600' : 'text-gray-500 hover:text-indigo-600'} flex items-center gap-2">
+                            Management <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                        </button>
+                        <div id="management-dropdown" class="dropdown-menu absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 overflow-hidden">
+                            <a href="management.html#pending-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                                <i class="fa-solid fa-envelope-open-text mr-2 text-indigo-500"></i> Pending Requests
+                            </a>
+                            <a href="management.html#due-dates-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                                <i class="fa-solid fa-calendar-day mr-2 text-indigo-500"></i> Resident Due Dates
+                            </a>
+                            <a href="management.html#inventory-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                                <i class="fa-solid fa-door-open mr-2 text-indigo-500"></i> Room Inventory
+                            </a>
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <button onclick="toggleDropdown(event, 'panel-dropdown')" class="text-xs font-black uppercase tracking-widest ${['panel_bookings.html','admin_panel.html','users.html'].includes(currentPage) ? 'text-indigo-600' : 'text-gray-500 hover:text-indigo-600'} flex items-center gap-2">
+                            Panel <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                        </button>
+                        <div id="panel-dropdown" class="dropdown-menu absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 overflow-hidden">
+                            <a href="admin_panel.html" class="block px-5 py-3 text-[10px] font-black uppercase ${isActive('admin_panel.html') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:bg-gray-50 hover:text-indigo-600'} transition border-b border-gray-50">
+                                <i class="fa-solid fa-circle-plus mr-2 text-sm text-indigo-500"></i> Add New Room
+                            </a>
+                            <a href="users.html" class="block px-5 py-3 text-[10px] font-black uppercase ${isActive('users.html') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:bg-gray-50 hover:text-indigo-600'} transition border-b border-gray-50">
+                                <i class="fa-solid fa-users-gear mr-2 text-sm text-indigo-500"></i> User Management
+                            </a>
+                            <a href="panel_bookings.html" class="block px-5 py-3 text-[10px] font-black uppercase ${isActive('panel_bookings.html') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:bg-gray-50 hover:text-indigo-600'} transition">
+                                <i class="fa-solid fa-list-check mr-2 text-sm text-indigo-500"></i> Booking List
+                            </a>
+                        </div>
+                    </div>
+                    <a href="book_history.html" class="text-xs font-black uppercase tracking-widest ${isActive('book_history.html') ? 'text-indigo-600' : 'text-gray-500 hover:text-indigo-600'} transition">History</a>
+                </div>
+            `;
+
+            navRight.innerHTML = `
+                <button onclick="toggleSidebar()" class="mobile-only w-12 h-12 flex flex-col items-center justify-center bg-gray-100 rounded-2xl border border-gray-200 hover:bg-gray-200 transition">
+                    <div class="w-6 h-0.5 bg-gray-800 mb-1"></div>
+                    <div class="w-6 h-0.5 bg-gray-800 mb-1"></div>
+                    <div class="w-6 h-0.5 bg-gray-800"></div>
+                </button>
+            `;
+
+            sidebarProfile.innerHTML = `
+                <div class="flex items-center gap-4 bg-gray-50 p-4 rounded-[2rem] border cursor-pointer hover:bg-gray-100 transition" onclick="window.location.href='profile.html'">
+                    <div class="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white"><i class="fa-solid fa-user-shield"></i></div>
+                    <div class="text-left flex-grow">
+                        <p class="text-[9px] font-black text-indigo-500 uppercase leading-none">${user.role}</p>
+                        <p class="text-sm font-bold text-gray-800">${user.name}</p>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-gray-400 text-sm"></i>
+                </div>
+            `;
+
+            sidebarLinks.innerHTML = `
+                <a href="index.html" class="flex items-center gap-4 p-4 rounded-2xl text-xs font-black uppercase tracking-widest ${isActive('index.html') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:bg-indigo-50 hover:text-indigo-600'} transition">
+                    <i class="fa-solid fa-house"></i> Home
+                </a>
+                <div class="relative">
+                    <button onclick="toggleDropdown(event, 'sidebar-management')" class="w-full flex justify-between items-center p-4 rounded-2xl text-xs font-black uppercase tracking-widest ${isActive('management.html') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:bg-indigo-50 hover:text-indigo-600'} transition">
+                        <span class="flex items-center gap-4"><i class="fa-solid fa-list-check w-4"></i> Management</span>
+                        <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                    </button>
+                    <div id="sidebar-management" class="dropdown-menu w-full bg-white rounded-2xl shadow-sm border border-gray-100 py-2 mt-1 overflow-hidden">
+                        <a href="management.html#pending-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                            <i class="fa-solid fa-envelope-open-text mr-2 text-indigo-500"></i> Pending Requests
+                        </a>
+                        <a href="management.html#due-dates-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                            <i class="fa-solid fa-calendar-day mr-2 text-indigo-500"></i> Resident Due Dates
+                        </a>
+                        <a href="management.html#inventory-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                            <i class="fa-solid fa-door-open mr-2 text-indigo-500"></i> Room Inventory
+                        </a>
+                    </div>
+                </div>
+                <div class="relative">
+                    <button onclick="toggleDropdown(event, 'sidebar-panel')" class="w-full flex justify-between items-center p-4 rounded-2xl text-xs font-black uppercase tracking-widest ${['panel_bookings.html','admin_panel.html','users.html'].includes(currentPage) ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:bg-indigo-50 hover:text-indigo-600'} transition">
+                        <span class="flex items-center gap-4"><i class="fa-solid fa-sliders w-4"></i> Panel</span>
+                        <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                    </button>
+                    <div id="sidebar-panel" class="dropdown-menu w-full bg-white rounded-2xl shadow-sm border border-gray-100 py-2 mt-1 overflow-hidden">
+                        <a href="admin_panel.html" class="block px-5 py-3 text-[10px] font-black uppercase ${isActive('admin_panel.html') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:bg-gray-50 hover:text-indigo-600'} transition border-b border-gray-50">
+                            <i class="fa-solid fa-circle-plus mr-2 text-sm text-indigo-500"></i> Add New Room
+                        </a>
+                        <a href="users.html" class="block px-5 py-3 text-[10px] font-black uppercase ${isActive('users.html') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:bg-gray-50 hover:text-indigo-600'} transition">
+                            <i class="fa-solid fa-users-gear mr-2 text-sm text-indigo-500"></i> User Management
+                        </a>
+                        <a href="panel_bookings.html" class="block px-5 py-3 text-[10px] font-black uppercase ${isActive('panel_bookings.html') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:bg-gray-50 hover:text-indigo-600'} transition">
+                            <i class="fa-solid fa-list-check mr-2 text-sm text-indigo-500"></i> Booking List
+                        </a>
+                    </div>
+                </div>
+                <a href="book_history.html" class="flex items-center gap-4 p-4 rounded-2xl text-xs font-black uppercase tracking-widest ${isActive('book_history.html') ? 'text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:bg-indigo-50 hover:text-indigo-600'} transition">
+                    <i class="fa-solid fa-clock-rotate-left w-4 text-center"></i> History
+                </a>
+            `;
+        }
+
+        function toggleSidebar() {
+            document.getElementById('sidebar-drawer').classList.toggle('translate-x-full');
+            document.getElementById('sidebar-overlay').classList.toggle('active');
+        }
+
+        function toggleDropdown(e, id) {
+            e.stopPropagation();
+            const menus = document.querySelectorAll('.dropdown-menu');
+            const target = document.getElementById(id);
+            menus.forEach(menu => { if (menu !== target) menu.classList.remove('show'); });
+            if (target) target.classList.toggle('show');
+        }
+
+        window.onclick = (event) => {
+            const isDropdownButton = event.target.closest('button[onclick*="toggleDropdown"]');
+            if (!isDropdownButton) {
+                document.querySelectorAll('.dropdown-menu').forEach(menu => menu.classList.remove('show'));
+            }
+        };
+
+        function logout() {
+            localStorage.removeItem('user');
+            window.location.href = 'auth.html';
+        }
+
+        document.addEventListener('DOMContentLoaded', loadBookingsPage);
+    </script>
+    <script src="page-loader.js"></script>
+</body>
+</html>
