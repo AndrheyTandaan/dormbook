@@ -114,6 +114,31 @@
             return 1; // Default
         }
 
+        function formatRoomType(roomType) {
+            if (!roomType) return 'Standard Room';
+            const capacity = getCapacity(roomType);
+            const personText = capacity === 1 ? 'person' : 'persons';
+            
+            // Extract the room type name without the capacity info
+            const type = roomType.toLowerCase();
+            let typeLabel = 'Standard';
+            
+            if (type.includes('single')) {
+                typeLabel = 'Single';
+            } else if (type.includes('double')) {
+                typeLabel = 'Double';
+            } else if (type.includes('triple')) {
+                typeLabel = 'Triple';
+            } else if (type.includes('quad')) {
+                typeLabel = 'Quad';
+            } else {
+                // Use the original room type if it doesn't match known types
+                typeLabel = roomType;
+            }
+            
+            return `${typeLabel} (${capacity} ${personText})`;
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
             const user = JSON.parse(userCheck);
             if(!user) {
@@ -238,6 +263,9 @@
                     priceMap[nameKey] = parseFloat(r.price) || 0; // Case-insensitive and trimmed fallback
                 });
 
+                // Store roomsData in sessionStorage for use in showBookingDetails
+                sessionStorage.setItem('roomsData', JSON.stringify(rooms));
+
                 console.log('Rooms data:', rooms);
                 console.log('Price map:', priceMap);
 
@@ -248,6 +276,9 @@
                 });
 
                 const myStays = allBookings.filter(b => b.user_name === user.name && b.status === 'Approved');
+                
+                // Store user bookings in sessionStorage
+                sessionStorage.setItem('userBookings', JSON.stringify(myStays));
                 
                 // Run notifications check
                 checkDueAlerts(myStays);
@@ -387,6 +418,7 @@
             const roomsRes = JSON.parse(sessionStorage.getItem('roomsData') || '[]');
             const roomData = roomsRes.find(r => r.name === booking.room_name);
             const roomType = booking.room_type || (roomData ? roomData.room_type : 'Standard Room');
+            const formattedRoomType = formatRoomType(roomType);
             const roomPrice = roomData ? parseFloat(roomData.price) || 0 : parseFloat(booking.price) || 0;
             
             const modal = document.createElement('div');
@@ -410,7 +442,7 @@
                             <div class="bg-indigo-50 p-4 rounded-2xl">
                                 <p class="text-[10px] font-black text-indigo-600 uppercase mb-2">Room Information</p>
                                 <h4 class="text-lg font-bold text-gray-800">${booking.room_name}</h4>
-                                <p class="text-sm text-gray-600 mt-1">${roomType}</p>
+                                <p class="text-sm text-gray-600 mt-1">${formattedRoomType}</p>
                             </div>
                             
                             <div class="grid grid-cols-2 gap-4">

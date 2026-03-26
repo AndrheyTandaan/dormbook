@@ -88,6 +88,7 @@
             const params = new URLSearchParams(window.location.search);
             const roomName = params.get('room');
             const roomDescription = params.get('desc');
+            const roomType = params.get('roomType') || 'Standard Room';
 
             // 1. Fill the UI with Room Data from URL
             if (roomName) {
@@ -134,6 +135,7 @@
                 user_id: user.id,
                 student_name: user.name,
                 room_name: document.getElementById('room-name').innerText,
+                room_type: decodeURIComponent(roomType),
                 start_date: formData.get('start_date'),
     
                 // CHANGE THIS LINE: Remove the + " Months"

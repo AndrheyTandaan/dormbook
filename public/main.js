@@ -88,7 +88,7 @@ function renderDorms(dorms) {
                 </div>
                 <p class="text-gray-500 text-sm mb-4 line-clamp-2">${dorm.description}</p>
                 <div class="space-y-2">
-                    ${bookButton}
+                    ${user && user.role !== 'admin' ? `<button onclick="openBookingModal('${dorm.name}', '${dorm.description.replace(/'/g, "\\'")}'${dorm.room_type ? `, '${(dorm.room_type).replace(/'/g, "\\'")}` : ', "Standard Room'} )" class="w-full bg-black text-white py-3 rounded-xl font-bold hover:bg-gray-800 transition">Book Now</button>` : bookButton}
                     ${adminActions}
                 </div>
             </div>`;
@@ -232,7 +232,7 @@ async function deleteDorm(id) {
 }
 
 // ... (Rest of your Booking/Modal/Payment logic remains the same)
-function openBookingModal(name, description) {
+function openBookingModal(name, description, roomType) {
     if (!localStorage.getItem('user')) {
         alert("Please login first to book a room.");
         return window.location.href = 'auth.html';
@@ -281,6 +281,7 @@ function openBookingModal(name, description) {
         currentBookingData = {
             user_id: user.id,
             room_name: name,
+            room_type: roomType || 'Standard Room',
             start_date: formData.get('start_date'),
             duration: rawDuration + " Months", 
             special_request: formData.get('special_request')
@@ -305,6 +306,7 @@ async function handleBookingSubmit() {
     const finalData = new FormData();
     finalData.append('user_id', currentBookingData.user_id);
     finalData.append('room_name', currentBookingData.room_name);
+    finalData.append('room_type', currentBookingData.room_type);
     finalData.append('start_date', currentBookingData.start_date);
     finalData.append('duration', currentBookingData.duration);
     finalData.append('special_request', currentBookingData.special_request);

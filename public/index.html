@@ -707,6 +707,7 @@
 
             formData.append('user_id', user.id);
             formData.append('room_name', document.getElementById('modal-room-name').innerText);
+            formData.append('room_type', currentRoom.room_type || 'Standard Room');
             formData.append('payment_type', selectedPaymentType);
             formData.append('amount_paid', cashToSubmit);
             formData.append('total_price', currentRoomPrice);

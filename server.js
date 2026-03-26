@@ -650,7 +650,7 @@ app.get('/api/admin/bookings', async (req, res) => {
 
 app.post('/api/book', upload.single('receipt'), async (req, res) => {
     try {
-        const { user_id, room_name, start_date, duration, special_request, amount_paid } = req.body;
+        const { user_id, room_name, room_type, start_date, duration, special_request, amount_paid } = req.body;
         
         // Validate start_date is not in the past
         const today = new Date().toISOString().split('T')[0];
@@ -686,11 +686,15 @@ app.post('/api/book', upload.single('receipt'), async (req, res) => {
 
         if (!user_id || !room_name) return res.status(400).json({ error: "Missing required booking data." });
 
+        // Extract duration as integer (remove " Months" suffix if present)
+        const durationValue = parseInt(duration) || 1;
+
         const bookingRef = await db.collection('bookings').add({
             user_id,
             room_name,
+            room_type: room_type || 'Standard Room',
             start_date,
-            duration: parseInt(duration),
+            duration: durationValue,
             special_request,
             receipt_url,
             amount_paid: parseFloat(amount_paid) || 0,
