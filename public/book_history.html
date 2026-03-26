@@ -30,6 +30,15 @@
             to { opacity: 1; transform: translateY(0) scale(1); }
         }
 
+        @keyframes scaleIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .animate-scale-in {
+            animation: scaleIn 0.2s ease-out;
+        }
+
         #sidebar-drawer { transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
         #sidebar-overlay.active { opacity: 1; pointer-events: auto; }
 
@@ -72,8 +81,26 @@
                 <h1 id="page-title" class="text-3xl font-black text-gray-900 uppercase tracking-tighter">My Bookings</h1>
                 <p id="page-subtitle" class="text-xs font-bold text-gray-400 uppercase">View and manage your reservations</p>
             </div>
+            <button id="clear-history-btn" onclick="showClearConfirmation()" class="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 transition text-sm">
+                <i class="fa-solid fa-trash"></i> Clear History
+            </button>
         </div>
         <div id="bookings-container" class="space-y-4"></div>
+    </div>
+
+    <!-- Clear Confirmation Modal -->
+    <div id="clear-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-8 animate-scale-in">
+            <div class="flex items-center justify-center w-12 h-12 bg-red-100 rounded-full mx-auto mb-4">
+                <i class="fa-solid fa-exclamation text-red-600 text-xl"></i>
+            </div>
+            <h2 id="modal-title" class="text-xl font-black text-gray-900 text-center mb-2">Clear History?</h2>
+            <p id="modal-message" class="text-sm text-gray-600 text-center mb-6">This action cannot be undone. All your booking records will be permanently deleted.</p>
+            <div class="flex gap-3">
+                <button onclick="hideClearConfirmation()" class="flex-1 px-4 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition">Cancel</button>
+                <button onclick="clearHistoryConfirmed()" class="flex-1 px-4 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition">Clear All</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -251,10 +278,16 @@
             const container = document.getElementById('bookings-container');
             const titleEl = document.getElementById('page-title');
             const subtitleEl = document.getElementById('page-subtitle');
+            const clearBtn = document.getElementById('clear-history-btn');
 
             if (user.role === 'admin') {
                 titleEl.innerText = "Global History";
                 subtitleEl.innerText = "History of all processed student applications";
+                clearBtn.innerHTML = '<i class="fa-solid fa-trash"></i> Clear All Bookings';
+            } else {
+                titleEl.innerText = "My Bookings";
+                subtitleEl.innerText = "View and manage your reservations";
+                clearBtn.innerHTML = '<i class="fa-solid fa-trash"></i> Clear My History';
             }
 
             try {
@@ -432,6 +465,77 @@
             document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.add('hidden'));
         };
         function logout() { localStorage.removeItem('user'); window.location.href = 'auth.html'; }
+
+        // --- CLEAR HISTORY FUNCTIONS ---
+        function showClearConfirmation() {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const modal = document.getElementById('clear-modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalMessage = document.getElementById('modal-message');
+            const confirmBtn = document.querySelector('#clear-modal button:last-child');
+            
+            if (user.role === 'admin') {
+                modalTitle.innerText = 'Clear All Bookings?';
+                modalMessage.innerText = 'This will permanently delete all booking records from the system. This action cannot be undone.';
+                confirmBtn.innerText = 'Clear All Bookings';
+            } else {
+                modalTitle.innerText = 'Clear Your History?';
+                modalMessage.innerText = 'This will permanently delete all your booking records. This action cannot be undone.';
+                confirmBtn.innerText = 'Clear My History';
+            }
+            
+            modal.classList.remove('hidden');
+        }
+
+        function hideClearConfirmation() {
+            document.getElementById('clear-modal').classList.add('hidden');
+        }
+
+        async function clearHistoryConfirmed() {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const modal = document.getElementById('clear-modal');
+            const button = event.target;
+            button.disabled = true;
+            button.innerText = 'Clearing...';
+
+            try {
+                let endpoint;
+                if (user.role === 'admin') {
+                    endpoint = `/api/bookings/clear?adminName=${encodeURIComponent(user.name)}`;
+                } else {
+                    endpoint = `/api/bookings/user/${user.id}/clear`;
+                }
+
+                const response = await fetch(endpoint, { method: 'DELETE' });
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(data.message || 'History cleared successfully!');
+                    modal.classList.add('hidden');
+                    // Reload the page to show empty history
+                    window.location.reload();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to clear history'));
+                    button.disabled = false;
+                    const user = JSON.parse(localStorage.getItem('user') || '{}');
+                    button.innerText = user.role === 'admin' ? 'Clear All Bookings' : 'Clear My History';
+                }
+            } catch (error) {
+                console.error('Error clearing history:', error);
+                alert('Failed to clear history. Please try again.');
+                button.disabled = false;
+                const user = JSON.parse(localStorage.getItem('user') || '{}');
+                button.innerText = user.role === 'admin' ? 'Clear All Bookings' : 'Clear My History';
+            }
+        }
+
+        // Close modal when clicking outside
+        document.addEventListener('click', (e) => {
+            const modal = document.getElementById('clear-modal');
+            if (e.target === modal) {
+                hideClearConfirmation();
+            }
+        });
     </script>
     <script src="page-loader.js"></script>
 </body>

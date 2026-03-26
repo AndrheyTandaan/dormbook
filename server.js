@@ -606,6 +606,9 @@ app.get('/api/admin/bookings', async (req, res) => {
         for (const bookingDoc of bookingsSnapshot.docs) {
             const bookingData = bookingDoc.data();
 
+            // Skip bookings marked as cleared for admin history
+            if (bookingData.admin_cleared === true) continue;
+
             // Get user name
             let userName = 'Unknown User';
             try {
@@ -707,10 +710,12 @@ app.get('/api/bookings/user/:userId', async (req, res) => {
         const bookingsSnapshot = await db.collection('bookings')
             .where('user_id', '==', req.params.userId)
             .get();
-        const bookings = bookingsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        })).sort((a, b) => (b.created_at?._seconds || 0) - (a.created_at?._seconds || 0));
+
+        const bookings = bookingsSnapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .filter(b => !b.user_hidden)
+            .sort((a, b) => (b.created_at?._seconds || 0) - (a.created_at?._seconds || 0));
+
         console.log(`Found ${bookings.length} bookings for user`);
         res.json(bookings || []);
     } catch (error) {
@@ -787,6 +792,92 @@ app.delete('/api/bookings/:id', async (req, res) => {
         res.json({ success: true });
     } catch (error) {
         console.error('Booking deletion error:', error);
+        res.setHeader('Content-Type', 'application/json');
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// --- CLEAR HISTORY ENDPOINTS ---
+// Clear all bookings for a specific user
+app.delete('/api/bookings/user/:userId/clear', async (req, res) => {
+    try {
+        const userId = req.params.userId;
+        
+        // Get all bookings for this user
+        const bookingsSnapshot = await db.collection('bookings')
+            .where('user_id', '==', userId)
+            .get();
+        
+        let deletedCount = 0;
+        
+        // Delete each booking
+        const batch = db.batch();
+        bookingsSnapshot.docs.forEach(doc => {
+            batch.delete(doc.ref);
+            deletedCount++;
+        });
+        
+        await batch.commit();
+        
+        res.setHeader('Content-Type', 'application/json');
+        res.json({ success: true, deletedCount: deletedCount, message: `Cleared ${deletedCount} booking(s) from history` });
+    } catch (error) {
+        console.error('Error clearing user bookings:', error);
+        res.setHeader('Content-Type', 'application/json');
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Clear all bookings (admin only)
+app.delete('/api/bookings/clear', async (req, res) => {
+    try {
+        const adminName = req.query.adminName || 'Admin';
+        
+        // Get all bookings
+        const bookingsSnapshot = await db.collection('bookings').get();
+        
+        let deletedCount = 0;
+        const batch = db.batch();
+        bookingsSnapshot.docs.forEach(doc => {
+            batch.delete(doc.ref);
+            deletedCount++;
+        });
+        
+        await batch.commit();
+        
+        // Log this action
+        logAction(adminName, `Cleared all bookings from system (${deletedCount} record(s))`);
+        
+        res.setHeader('Content-Type', 'application/json');
+        res.json({ success: true, deletedCount: deletedCount, message: `Cleared ${deletedCount} booking(s) from system` });
+    } catch (error) {
+        console.error('Error clearing all bookings:', error);
+        res.setHeader('Content-Type', 'application/json');
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Clear all action logs (admin only)
+app.delete('/api/admin/logs/clear', async (req, res) => {
+    try {
+        const adminName = req.query.adminName || 'Admin';
+        
+        // Get all action logs
+        const logsSnapshot = await db.collection('action_logs').get();
+        
+        let deletedCount = 0;
+        const batch = db.batch();
+        logsSnapshot.docs.forEach(doc => {
+            batch.delete(doc.ref);
+            deletedCount++;
+        });
+        
+        await batch.commit();
+        
+        res.setHeader('Content-Type', 'application/json');
+        res.json({ success: true, deletedCount: deletedCount, message: `Cleared ${deletedCount} log record(s)` });
+    } catch (error) {
+        console.error('Error clearing action logs:', error);
         res.setHeader('Content-Type', 'application/json');
         res.status(500).json({ error: error.message });
     }
