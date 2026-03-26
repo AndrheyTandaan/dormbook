@@ -410,9 +410,10 @@ app.patch('/api/users/:id/notif-badge-viewed', async (req, res) => {
     try {
         const { id } = req.params;
         await db.collection('users').doc(id).update({
-            notif_badge_viewed_at: admin.firestore.FieldValue.serverTimestamp()
+            notif_badge_viewed_at: admin.firestore.FieldValue.serverTimestamp(),
+            notif_badge_unread: false
         });
-        res.json({ success: true, viewed_at: new Date().toISOString() });
+        res.json({ success: true, viewed_at: new Date().toISOString(), unread: false });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -425,10 +426,12 @@ app.get('/api/users/:id/notif-badge-status', async (req, res) => {
         if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
 
         const userData = userDoc.data();
-        const viewed = !!userData.notif_badge_viewed_at;
+        const unread = userData.notif_badge_unread === true;
+        const viewed = !unread;
 
         res.json({
             viewed,
+            unread,
             viewed_at: userData.notif_badge_viewed_at ? (userData.notif_badge_viewed_at.toDate ? userData.notif_badge_viewed_at.toDate().toISOString() : new Date(userData.notif_badge_viewed_at).toISOString()) : null
         });
     } catch (error) {
@@ -778,7 +781,8 @@ app.patch('/api/bookings/:id/status', async (req, res) => {
 
                 // Reset the badge-viewed marker so all pages show red dot until viewed again
                 await db.collection('users').doc(bookingData.user_id).update({
-                    notif_badge_viewed_at: null
+                    notif_badge_viewed_at: null,
+                    notif_badge_unread: true
                 });
 
                 console.log(`Notification created for user ${bookingData.user_id} for ${status} booking`);

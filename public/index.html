@@ -453,7 +453,7 @@
                 const res = await fetch(`/api/users/${user.id}/notif-badge-status?t=${Date.now()}`);
                 if (res.ok) {
                     const data = await res.json();
-                    return data.viewed;
+                    return !data.unread;
                 }
             } catch (err) {
                 console.warn('Could not check badge status:', err);
