@@ -259,19 +259,39 @@
 
         document.addEventListener('DOMContentLoaded', async () => {
             setupNavbar();
-            window.showPageLoader();
+            
+            // Check if this is a navigation back (performance.navigation.type === 2)
+            const isNavigatingBack = performance.getEntriesByType('navigation')[0]?.type === 'back_forward';
+            
+            if (!isNavigatingBack) {
+                window.showPageLoader();
+            }
+            
             await loadRooms();
             const user = JSON.parse(localStorage.getItem('user'));
             if (user && user.role === 'admin') {
                 await loadAdminAnalytics();
             }
-            window.hidePageLoader();
+            
+            if (!isNavigatingBack) {
+                window.hidePageLoader();
+            }
 
             // Add search functionality
             const searchInput = document.getElementById('search-input');
             const filterBtn = document.getElementById('filter-btn');
             if (searchInput) searchInput.addEventListener('input', applyFilters);
             if (filterBtn) filterBtn.addEventListener('click', applyFilters);
+        });
+
+        // Handle page show events (including back/forward navigation)
+        window.addEventListener('pageshow', function(event) {
+            // If page is restored from cache (back/forward navigation), hide any lingering loader
+            if (event.persisted || performance.getEntriesByType('navigation')[0]?.type === 'back_forward') {
+                if (window.hidePageLoader) {
+                    window.hidePageLoader();
+                }
+            }
         });
 
         function setupNavbar() {

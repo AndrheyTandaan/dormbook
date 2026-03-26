@@ -131,11 +131,14 @@
                 </div>
 
                 <div class="flex gap-4 pt-6">
-                    <button type="button" onclick="window.history.back()" class="flex-1 bg-gray-100 text-gray-500 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 transition">
+                    <button type="button" onclick="cancelEdit()" class="flex-1 bg-gray-100 text-gray-500 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 transition">
                         Cancel
                     </button>
-                    <button type="submit" id="save-btn" class="flex-1 bg-indigo-600 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition shadow-lg shadow-indigo-200">
-                        Save Changes
+                    <button type="button" id="update-profile-btn" class="flex-1 bg-indigo-600 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition shadow-lg shadow-indigo-200">
+                        Update Profile
+                    </button>
+                    <button type="button" id="change-password-btn" class="flex-1 bg-blue-600 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition shadow-lg shadow-blue-200">
+                        Change Password
                     </button>
                 </div>
             </form>
@@ -165,6 +168,10 @@
                     const userData = await res.json();
                     document.getElementById('name-input').value = userData.name;
                     document.getElementById('email-input').value = userData.email;
+                    
+                    // Set data attributes for current values
+                    document.getElementById('name-input').setAttribute('data-current-name', userData.name);
+                    document.getElementById('email-input').setAttribute('data-current-email', userData.email);
 
                     const preview = document.getElementById('preview');
                     const defaultAvatar = document.getElementById('default-avatar');
@@ -181,6 +188,15 @@
             } catch (err) {
                 console.error('Failed to load user profile:', err);
             }
+        }
+
+        function cancelEdit() {
+            // Hide page loader before navigating away
+            if (window.hidePageLoader) {
+                window.hidePageLoader();
+            }
+            // Navigate back to previous page
+            window.history.back();
         }
 
         document.getElementById('profile-form').addEventListener('submit', async (e) => {
@@ -233,6 +249,122 @@
             } finally {
                 saveBtn.disabled = false;
                 saveBtn.innerText = originalText;
+            }
+        });
+
+        // Update Profile Button
+        document.getElementById('update-profile-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('update-profile-btn');
+            const originalText = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = 'Updating...';
+
+            const user = JSON.parse(localStorage.getItem('user'));
+            const name = document.getElementById('name-input').value.trim();
+            const email = document.getElementById('email-input').value.trim();
+
+            // Get current values to compare
+            const currentName = document.getElementById('name-input').getAttribute('data-current-name') || user.name;
+            const currentEmail = document.getElementById('email-input').getAttribute('data-current-email') || user.email;
+
+            const updateData = {};
+
+            // Only include fields that have changed
+            if (name && name !== currentName) {
+                updateData.name = name;
+            }
+            if (email && email !== currentEmail) {
+                updateData.email = email;
+            }
+
+            // If nothing to update, show message
+            if (Object.keys(updateData).length === 0) {
+                alert('No changes detected. Please modify name or email to update.');
+                btn.disabled = false;
+                btn.innerText = originalText;
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/users/${user.id}/profile`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updateData)
+                });
+
+                const result = await res.json();
+
+                if (res.ok) {
+                    // Update localStorage with new data
+                    const updatedUser = { ...user, ...updateData };
+                    localStorage.setItem('user', JSON.stringify(updatedUser));
+
+                    alert('Profile updated successfully!');
+                    // Update the data attributes with new values
+                    if (updateData.name) document.getElementById('name-input').setAttribute('data-current-name', updateData.name);
+                    if (updateData.email) document.getElementById('email-input').setAttribute('data-current-email', updateData.email);
+                } else {
+                    alert(result.error || 'Failed to update profile');
+                }
+            } catch (err) {
+                console.error('Profile update error:', err);
+                alert('Connection error. Please try again.');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
+            }
+        });
+
+        // Change Password Button
+        document.getElementById('change-password-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('change-password-btn');
+            const originalText = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = 'Changing...';
+
+            const user = JSON.parse(localStorage.getItem('user'));
+            const currentPassword = document.getElementById('current-password').value.trim();
+            const newPassword = document.getElementById('new-password').value.trim();
+
+            if (!currentPassword || !newPassword) {
+                alert('Please fill in both current and new password.');
+                btn.disabled = false;
+                btn.innerText = originalText;
+                return;
+            }
+
+            if (newPassword.length < 6) {
+                alert('New password must be at least 6 characters long.');
+                btn.disabled = false;
+                btn.innerText = originalText;
+                return;
+            }
+
+            const updateData = { currentPassword, newPassword };
+
+            try {
+                const res = await fetch(`/api/users/${user.id}/profile`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updateData)
+                });
+
+                const result = await res.json();
+
+                if (res.ok) {
+                    alert('Password changed successfully!');
+                    // Clear password fields
+                    document.getElementById('current-password').value = '';
+                    document.getElementById('new-password').value = '';
+                } else {
+                    alert(result.error || 'Failed to change password');
+                }
+            } catch (err) {
+                console.error('Password change error:', err);
+                alert('Connection error. Please try again.');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
             }
         });
 
