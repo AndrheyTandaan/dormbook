@@ -339,8 +339,10 @@ app.post('/api/forgot-password', async (req, res) => {
             });
             console.log('[EmailJS] Initialized successfully');
 
-            const appUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
-            const resetLink = `${appUrl}/reset-password.html?token=${resetToken}`;
+            const configuredUrl = (process.env.BASE_URL || process.env.FRONTEND_URL || process.env.CLIENT_URL || '').trim();
+            const appUrl = configuredUrl || `${req.protocol}://${req.get('host')}`;
+            const normalizedAppUrl = appUrl.replace(/\/+$/, '');
+            const resetLink = `${normalizedAppUrl}/reset-password.html?token=${resetToken}`;
 
             const templateParams = {
                 to_email: email,
