@@ -249,6 +249,7 @@
             } finally {
                 saveBtn.disabled = false;
                 saveBtn.innerText = originalText;
+                window.hidePageLoader && window.hidePageLoader();
             }
         });
 

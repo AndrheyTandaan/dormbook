@@ -98,6 +98,85 @@ document.addEventListener('DOMContentLoaded', () => {
                 resetButton();
             }
         });
+
+        // Forgot Password Modal
+        const forgotPasswordBtn = document.getElementById('forgot-password-btn');
+        const forgotPasswordModal = document.getElementById('forgot-password-modal');
+        const forgotPasswordForm = document.getElementById('forgot-password-form');
+        const backToLoginBtn = document.getElementById('back-to-login-btn');
+        const forgotError = document.getElementById('forgot-error');
+        const forgotSuccess = document.getElementById('forgot-success');
+
+        if (forgotPasswordBtn) {
+            forgotPasswordBtn.addEventListener('click', () => {
+                forgotPasswordModal.classList.remove('hidden');
+            });
+        }
+
+        if (backToLoginBtn) {
+            backToLoginBtn.addEventListener('click', () => {
+                forgotPasswordModal.classList.add('hidden');
+                forgotError.classList.add('hidden');
+                forgotSuccess.classList.add('hidden');
+                forgotPasswordForm.reset();
+            });
+        }
+
+        if (forgotPasswordForm) {
+            forgotPasswordForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                forgotError.classList.add('hidden');
+                forgotSuccess.classList.add('hidden');
+
+                const formData = new FormData(forgotPasswordForm);
+                const data = Object.fromEntries(formData.entries());
+
+                const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailPattern.test(data.email)) {
+                    forgotError.innerText = 'Please enter a valid email address';
+                    forgotError.classList.remove('hidden');
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/api/forgot-password', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+
+                    console.log('[Auth] Forgot password response:', response.status, response.ok);
+                    const result = await response.json();
+                    console.log('[Auth] Result:', result);
+
+                    if (response.ok) {
+                        if (result.resetLink) {
+                            // Email not configured - show reset link directly
+                            forgotSuccess.innerHTML = `
+                                <div>
+                                    <p>Email not configured. Copy this reset link:</p>
+                                    <a href="${result.resetLink}" target="_blank" style="color: #10B981; word-break: break-all;">${result.resetLink}</a>
+                                    <p style="font-size: 12px; margin-top: 8px; color: #EF4444;">⚠️ Configure email in .env for production use</p>
+                                </div>
+                            `;
+                        } else {
+                            forgotSuccess.innerText = result.message || 'Reset link sent! Check your email.';
+                        }
+                        forgotSuccess.classList.remove('hidden');
+                    } else {
+                        forgotError.innerText = result.error || 'Failed to send reset link';
+                        forgotError.classList.remove('hidden');
+                    }
+                } catch (err) {
+                    console.error('Forgot Password Error:', err);
+                    forgotError.innerText = 'Connection issue, try again.';
+                    forgotError.classList.remove('hidden');
+                } finally {
+                    // Hide the page loader after response
+                    window.hidePageLoader && window.hidePageLoader();
+                }
+            });
+        }
     }
 
     function resetButton() {

@@ -281,6 +281,154 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
+// Forgot Password Route
+app.post('/api/forgot-password', async (req, res) => {
+    const { email } = req.body;
+
+    if (!email) {
+        return res.status(400).json({ error: 'Email is required' });
+    }
+
+    try {
+        // Check if user exists
+        const userQuery = await db.collection('users').where('email', '==', email).get();
+        if (userQuery.empty) {
+            // Don't reveal if email exists or not for security
+            return res.json({ success: true, message: 'If the email exists, a reset link has been sent.' });
+        }
+
+        const userDoc = userQuery.docs[0];
+        const userData = userDoc.data();
+
+        // Generate reset token
+        const crypto = require('crypto');
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const resetTokenExpiry = Date.now() + 3600000; // 1 hour
+
+        // Store reset token in user document
+        await userDoc.ref.update({
+            resetToken: resetToken,
+            resetTokenExpiry: resetTokenExpiry
+        });
+
+        // Send email using EmailJS
+        try {
+            const emailjs = require('@emailjs/nodejs');
+            
+            // Get credentials from environment variables
+            const publicKey = process.env.EMAILJS_PUBLIC_KEY;
+            const privateKey = process.env.EMAILJS_PRIVATE_KEY;
+            const serviceId = process.env.EMAILJS_SERVICE_ID;
+            const templateId = process.env.EMAILJS_TEMPLATE_ID;
+
+            console.log('[EmailJS] Checking credentials:', {
+                hasPublicKey: !!publicKey,
+                hasPrivateKey: !!privateKey,
+                hasServiceId: !!serviceId,
+                hasTemplateId: !!templateId
+            });
+
+            if (!publicKey || !privateKey || !serviceId || !templateId) {
+                throw new Error('EmailJS credentials not configured in environment');
+            }
+
+            // Initialize EmailJS with credentials from .env
+            emailjs.init({
+                publicKey: publicKey,
+                privateKey: privateKey
+            });
+            console.log('[EmailJS] Initialized successfully');
+
+            const resetLink = `${req.protocol}://${req.get('host')}/reset-password.html?token=${resetToken}`;
+
+            const templateParams = {
+                to_email: email,
+                user_name: userData.name,
+                reset_link: resetLink
+            };
+
+            console.log('[EmailJS] Sending with params:', { to_email: email, serviceId, templateId });
+
+            await emailjs.send(serviceId, templateId, templateParams);
+            console.log(`[EmailJS] Email sent successfully to ${email}`);
+            res.json({ success: true, message: 'Reset link sent to your email.' });
+
+        } catch (emailError) {
+            console.error('[EmailJS] Email sending failed:', emailError);
+            console.error('[EmailJS] Error details:', {
+                message: emailError.message,
+                stack: emailError.stack,
+                toString: emailError.toString()
+            });
+            // Fallback: return reset link if email fails
+            const resetLink = `${req.protocol}://${req.get('host')}/reset-password.html?token=${resetToken}`;
+            res.json({
+                success: true,
+                message: 'Email sending failed. Use this reset link:',
+                resetLink: resetLink,
+                note: 'Check your EmailJS configuration.'
+            });
+        }
+
+    } catch (err) {
+        console.error('Forgot password error:', err);
+        res.status(500).json({ error: "Server error" });
+    }
+});
+
+// Reset Password Route
+app.post('/api/reset-password', async (req, res) => {
+    const { token, password } = req.body;
+
+    if (!token || !password) {
+        return res.status(400).json({ error: 'Token and password are required' });
+    }
+
+    // enforce reasonable password policy
+    const passwordPolicy = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]).{8,}$/;
+    if (!passwordPolicy.test(password)) {
+        return res.status(400).json({
+            error: 'Password must be at least 8 characters, include uppercase, lowercase, number, and symbol.'
+        });
+    }
+
+    try {
+        // Find user with matching reset token
+        const userQuery = await db.collection('users').where('resetToken', '==', token).get();
+        if (userQuery.empty) {
+            return res.status(400).json({ error: 'Invalid or expired reset token' });
+        }
+
+        const userDoc = userQuery.docs[0];
+        const userData = userDoc.data();
+
+        // Check if token is expired
+        if (!userData.resetTokenExpiry || Date.now() > userData.resetTokenExpiry) {
+            return res.status(400).json({ error: 'Reset token has expired' });
+        }
+
+        // Ensure token is not reused from another session (extra safeties)
+        if (userData.resetToken !== token) {
+            return res.status(400).json({ error: 'Invalid reset token' });
+        }
+
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(password, 12);
+
+        // Update password and clear reset token
+        await userDoc.ref.update({
+            password: hashedPassword,
+            resetToken: null,
+            resetTokenExpiry: null
+        });
+
+        res.json({ success: true, message: 'Password reset successfully' });
+    } catch (err) {
+        console.error('Reset password error:', err);
+        res.status(500).json({ error: "Server error" });
+    }
+});
+
 app.get('/auth/logout', (req, res) => {
     req.logout(() => {
         res.redirect('/auth.html');
