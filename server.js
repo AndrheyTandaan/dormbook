@@ -344,6 +344,10 @@ app.post('/api/forgot-password', async (req, res) => {
             const normalizedAppUrl = appUrl.replace(/\/+$/, '');
             const resetLink = `${normalizedAppUrl}/reset-password.html?token=${resetToken}`;
 
+            console.log('[Forgot Password] appUrl:', appUrl);
+            console.log('[Forgot Password] normalizedAppUrl:', normalizedAppUrl);
+            console.log('[Forgot Password] resetLink generated:', resetLink);
+
             const templateParams = {
                 to_email: email,
                 user_name: userData.name,
