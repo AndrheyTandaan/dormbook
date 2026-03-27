@@ -339,7 +339,8 @@ app.post('/api/forgot-password', async (req, res) => {
             });
             console.log('[EmailJS] Initialized successfully');
 
-            const resetLink = `${process.env.BASE_URL}/reset-password.html?token=${resetToken}`;
+            const appUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+            const resetLink = `${appUrl}/reset-password.html?token=${resetToken}`;
 
             const templateParams = {
                 to_email: email,
@@ -361,7 +362,8 @@ app.post('/api/forgot-password', async (req, res) => {
                 toString: emailError.toString()
             });
             // Fallback: return reset link if email fails
-            const resetLink = `${process.env.BASE_URL}/reset-password.html?token=${resetToken}`;
+            const appUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+            const resetLink = `${appUrl}/reset-password.html?token=${resetToken}`;
             res.json({
                 success: true,
                 message: 'Email sending failed. Use this reset link:',
