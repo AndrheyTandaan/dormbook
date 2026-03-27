@@ -18,6 +18,7 @@
         #sidebar-drawer { transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
         #sidebar-overlay.active { opacity: 1; pointer-events: auto; }
     </style>
+    <script src="/socket.io/socket.io.js"></script>
 </head>
 <body class="text-gray-900">
     <nav class="fixed top-0 left-0 right-0 flex justify-between items-center px-8 py-4 bg-white/90 backdrop-blur-md border-b z-50 min-h-16">
@@ -84,6 +85,31 @@
     </div>
 
     <script>
+        let socket;
+
+        function setupRealtimePanelBookings() {
+            if (typeof io === 'undefined') {
+                console.warn('Socket.IO client is not loaded');
+                return;
+            }
+
+            socket = io();
+            socket.on('connect', () => {
+                console.info('Socket connected', socket.id);
+            });
+
+            socket.on('bookings:updated', () => {
+                console.info('Server sent bookings:updated');
+                if (typeof loadBookingsPage === 'function') {
+                    loadBookingsPage();
+                }
+            });
+
+            socket.on('connect_error', (err) => {
+                console.error('Socket connection error:', err);
+            });
+        }
+
         async function loadBookingsPage() {
             const user = JSON.parse(localStorage.getItem('user'));
             if (!user || user.role !== 'admin') {
@@ -273,7 +299,10 @@
             window.location.href = 'auth.html';
         }
 
-        document.addEventListener('DOMContentLoaded', loadBookingsPage);
+        document.addEventListener('DOMContentLoaded', () => {
+            setupRealtimePanelBookings();
+            loadBookingsPage();
+        });
     </script>
     <script src="page-loader.js"></script>
 </body>

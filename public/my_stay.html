@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Stay | DormBook</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         html { scroll-behavior: smooth; }
@@ -139,6 +140,20 @@
             return `${typeLabel} (${capacity} ${personText})`;
         }
 
+        let myStaySocket = null;
+
+        function setupRealtimeMyStay(user) {
+            if (typeof io === 'undefined') {
+                console.warn('Socket.IO not loaded');
+                return;
+            }
+            myStaySocket = io();
+            myStaySocket.on('connect', () => console.info('my_stay socket connected', myStaySocket.id));
+            myStaySocket.on('bookings:updated', () => loadUserData(user));
+            myStaySocket.on('users:updated', () => loadUserData(user));
+            myStaySocket.on('dorms:updated', () => loadUserData(user));
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
             const user = JSON.parse(userCheck);
             if(!user) {
@@ -146,6 +161,7 @@
                 return;
             }
             setupNavbar();
+            setupRealtimeMyStay(user);
             window.showPageLoader();
             await loadUserData(user);
             window.hidePageLoader();

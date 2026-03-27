@@ -242,6 +242,7 @@
         </div>
     </div>
 
+    <script src="/socket.io/socket.io.js"></script>
     <script>
         const userCheck = localStorage.getItem('user');
         if (!userCheck) { window.location.href = 'welcome.html'; }
@@ -252,6 +253,38 @@
         let currentRoom = null;
         let allRooms = [];
         let roomCounts = {};
+        let socket = null;
+
+        function setupRealtimeSocketForIndex() {
+            if (typeof io === 'undefined') {
+                console.warn('Socket.IO client is not loaded');
+                return;
+            }
+
+            socket = io();
+
+            socket.on('connect', () => {
+                console.info('Socket connected', socket.id);
+            });
+
+            socket.on('dorms:updated', (dorms) => {
+                if (Array.isArray(dorms) && typeof renderDorms === 'function') {
+                    allRooms = dorms;
+                    renderDorms(dorms);
+                }
+            });
+
+            socket.on('bookings:updated', () => {
+                if (typeof loadRooms === 'function') {
+                    loadRooms();
+                }
+            });
+
+            socket.on('action_logs:updated', (logs) => {
+                // no-op unless this page has action logs
+                console.debug('action_logs updated', logs);
+            });
+        }
 
         function getCapacity(roomType) {
             if (!roomType) return 1;
@@ -264,6 +297,7 @@
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
+            setupRealtimeSocketForIndex();
             setupNavbar();
             
             // Check if this is a navigation back (performance.navigation.type === 2)

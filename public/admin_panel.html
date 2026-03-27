@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Panel | DormBook</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         html { 
@@ -175,8 +176,22 @@
     </div>
 
     <script>
+        let adminPanelSocket = null;
+        function setupRealtimeAdminPanel() {
+            if (typeof io === 'undefined') {
+                console.warn('Socket.IO not loaded');
+                return;
+            }
+            adminPanelSocket = io();
+            adminPanelSocket.on('connect', () => console.info('admin_panel socket connected', adminPanelSocket.id));
+            adminPanelSocket.on('dorms:updated', () => window.location.reload());
+            adminPanelSocket.on('bookings:updated', () => window.location.reload());
+            adminPanelSocket.on('users:updated', () => window.location.reload());
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             setupNavbar();
+            setupRealtimeAdminPanel();
             setupPreview();
             setupFormSubmission(); 
         });

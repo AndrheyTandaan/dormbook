@@ -1,7 +1,50 @@
 let allDorms = []; // Store original data for filtering
 let currentBookingData = {}; // Temporary storage for form data before payment
+let socket = null;
+
+function setupRealtimeSocket() {
+    if (typeof io === 'undefined') {
+        console.warn('Socket.IO client is not loaded');
+        return;
+    }
+
+    socket = io();
+
+    socket.on('connect', () => {
+        console.info('Socket connected', socket.id);
+    });
+
+    socket.on('connect_error', (err) => {
+        console.error('Socket connection error:', err);
+    });
+
+    socket.on('dorms:updated', (dorms) => {
+        if (!Array.isArray(dorms)) return;
+        allDorms = dorms;
+        renderDorms(dorms);
+    });
+
+    socket.on('bookings:updated', (bookings) => {
+        console.info('bookings:updated', bookings);
+        // Optional: trigger refresh in booking-specific views
+        if (typeof fetchLogs === 'function') {
+            fetchLogs(true);
+        }
+    });
+
+    socket.on('users:updated', (users) => {
+        console.info('users:updated', users);
+    });
+
+    socket.on('action_logs:updated', (logs) => {
+        if (typeof renderLogs === 'function') {
+            renderLogs(logs);
+        }
+    });
+}
 
 document.addEventListener('DOMContentLoaded', () => {
+    setupRealtimeSocket();
     updateNavbar();
     loadDorms();
 

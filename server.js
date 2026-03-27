@@ -185,6 +185,11 @@ async function logAction(adminName, details) {
             action_details: details,
             timestamp: admin.firestore.FieldValue.serverTimestamp()
         });
+
+        // Emit action log update for realtime admin view
+        const logsSnapshot = await db.collection('action_logs').orderBy('timestamp','desc').get();
+        const logs = logsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        io.emit('action_logs:updated', logs);
     } catch (error) {
         console.error('Error logging action:', error);
     }
@@ -206,6 +211,13 @@ function setupRealtimeBroadcast() {
         const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         io.emit('users:updated', users);
     }, err => console.error('Firestore users snapshot error:', err));
+
+    db.collection('action_logs').onSnapshot(snapshot => {
+        const logs = snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        io.emit('action_logs:updated', logs);
+    }, err => console.error('Firestore action_logs snapshot error:', err));
 }
 
 setupRealtimeBroadcast();
@@ -736,6 +748,11 @@ app.post('/api/book', upload.single('receipt'), async (req, res) => {
             created_at: admin.firestore.FieldValue.serverTimestamp()
         });
 
+        // Emit booking update immediately to connected clients (real-time) 
+        const snapshot = await db.collection('bookings').get();
+        const bookings = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        io.emit('bookings:updated', bookings);
+
         res.json({ success: true, bookingId: bookingRef.id });
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -790,6 +807,11 @@ app.patch('/api/bookings/:id/status', async (req, res) => {
         }
 
         await db.collection('bookings').doc(id).update({ status });
+
+        // Emit booking update right away for admin/user realtime UI
+        const bookingSnapshot = await db.collection('bookings').get();
+        const allBookings = bookingSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        io.emit('bookings:updated', allBookings);
         
         // Create notification for user when booking is approved or rejected
         if (status === 'Approved' || status === 'Rejected') {

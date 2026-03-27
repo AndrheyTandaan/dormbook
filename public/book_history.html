@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>History | DormBook</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         html { scroll-behavior: smooth; overflow-y: scroll; scrollbar-gutter: stable; }
@@ -104,12 +105,26 @@
     </div>
 
     <script>
+        let bookHistorySocket = null;
+        function setupRealtimeBookHistory(user) {
+            if (typeof io === 'undefined') {
+                console.warn('Socket.IO not loaded');
+                return;
+            }
+            bookHistorySocket = io();
+            bookHistorySocket.on('connect', () => console.info('book_history socket connected', bookHistorySocket.id));
+            bookHistorySocket.on('bookings:updated', () => fetchBookings(user));
+            bookHistorySocket.on('dorms:updated', () => fetchBookings(user));
+            bookHistorySocket.on('users:updated', () => fetchBookings(user));
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
             const userJson = localStorage.getItem('user');
             const user = userJson ? JSON.parse(userJson) : null;
             if (!user) { window.location.href = 'auth.html'; return; }
 
             setupNavbar(user);
+            setupRealtimeBookHistory(user);
             window.showPageLoader();
             await fetchBookings(user);
             window.hidePageLoader();

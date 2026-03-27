@@ -6,6 +6,7 @@
 <title>Management | DormBook</title>
 
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="/socket.io/socket.io.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
 <style>
@@ -161,10 +162,25 @@ body { background-color: #f9fafb; min-height: 100vh; height: auto !important; ov
 <script>
 document.addEventListener('DOMContentLoaded', async () => {
     setupNavbar();
+    setupRealtimeManagement();
     window.showPageLoader();
     await refreshAdminData();
     window.hidePageLoader();
 });
+
+// Realtime updates with Socket.IO
+let managementSocket = null;
+function setupRealtimeManagement() {
+    if (typeof io === 'undefined') {
+        console.warn('Socket.IO not loaded');
+        return;
+    }
+    managementSocket = io();
+    managementSocket.on('connect', () => console.info('management socket connected', managementSocket.id));
+    managementSocket.on('dorms:updated', () => refreshAdminData());
+    managementSocket.on('bookings:updated', () => refreshAdminData());
+    managementSocket.on('action_logs:updated', () => refreshAdminData());
+}
 
 // NAVBAR + SIDEBAR SETUP
 function setupNavbar() {

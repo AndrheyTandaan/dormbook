@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>User Management | DormBook</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         body { background-color: #f9fafb; min-height: 100vh; overflow-y: auto !important; }
@@ -332,6 +333,39 @@
         }
 
         async function deleteUser(userId) {
+            if(confirm("Permanently delete this user?")) {
+                try {
+                    await fetch(`/api/admin/users/${userId}?adminName=${currentUser.name}`, { method: 'DELETE' });
+                    loadUsers();
+                } catch (err) { alert("Error deleting user"); }
+            }
+        }
+
+        let usersSocket = null;
+
+        function setupRealtimeUsers() {
+            if (typeof io === 'undefined') {
+                console.warn('Socket.IO not present');
+                return;
+            }
+            usersSocket = io();
+            usersSocket.on('connect', () => console.info('users socket connected', usersSocket.id));
+            usersSocket.on('users:updated', () => loadUsers());
+            usersSocket.on('dorms:updated', () => loadUsers());
+            usersSocket.on('bookings:updated', () => loadUsers());
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (!currentUser || currentUser.role !== 'admin') {
+                window.location.href = 'index.html';
+                return;
+            }
+            setupNavbar();
+            setupRealtimeUsers();
+            window.showPageLoader();
+            await loadUsers();
+            window.hidePageLoader();
+        });
             if(confirm("Permanently delete this user?")) {
                 try {
                     await fetch(`/api/admin/users/${userId}?adminName=${currentUser.name}`, { method: 'DELETE' });
