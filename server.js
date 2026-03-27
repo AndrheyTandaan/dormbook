@@ -340,10 +340,17 @@ app.post('/api/forgot-password', async (req, res) => {
             console.log('[EmailJS] Initialized successfully');
 
             const configuredUrl = (process.env.BASE_URL || process.env.FRONTEND_URL || process.env.CLIENT_URL || '').trim();
-            const appUrl = configuredUrl || `${req.protocol}://${req.get('host')}`;
+            const runtimeHost = `${req.protocol}://${req.get('host')}`;
+            const fallbackUrl = runtimeHost.includes('localhost') && process.env.NODE_ENV === 'production'
+                ? 'https://dormbook.onrender.com'
+                : runtimeHost;
+            const appUrl = configuredUrl || fallbackUrl;
             const normalizedAppUrl = appUrl.replace(/\/+$/, '');
             const resetLink = `${normalizedAppUrl}/reset-password.html?token=${resetToken}`;
 
+            console.log('[Forgot Password] configuredUrl:', configuredUrl);
+            console.log('[Forgot Password] runtimeHost:', runtimeHost);
+            console.log('[Forgot Password] fallbackUrl:', fallbackUrl);
             console.log('[Forgot Password] appUrl:', appUrl);
             console.log('[Forgot Password] normalizedAppUrl:', normalizedAppUrl);
             console.log('[Forgot Password] resetLink generated:', resetLink);
