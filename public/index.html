@@ -957,38 +957,70 @@
         }
 
         async function submitRefundRequest() {
+            const user = JSON.parse(localStorage.getItem('user'));
             const bookingId = document.getElementById('refund-booking-id').value;
-            const fullName = document.getElementById('refund-full-name').value;
-            const contactNumber = document.getElementById('refund-contact-number').value;
+            const fullName = document.getElementById('refund-full-name').value.trim();
+            const contactNumber = document.getElementById('refund-contact-number').value.trim();
+            const roomName = document.getElementById('refund-room-name').value;
 
             if (!fullName || !contactNumber) {
                 alert('Please fill in all fields');
                 return;
             }
 
+            if (!bookingId || !user.id || !roomName) {
+                alert('Missing booking information. Please close and reopen the refund modal.');
+                return;
+            }
+
             try {
                 window.showPageLoader();
+                console.log('Submitting refund request:', { user_id: user.id, booking_id: bookingId, full_name: fullName, contact_number: contactNumber, room_name: roomName });
+                
                 const res = await fetch('/api/refund/request', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ booking_id: bookingId, full_name: fullName, contact_number: contactNumber })
+                    body: JSON.stringify({ 
+                        user_id: user.id, 
+                        booking_id: bookingId, 
+                        full_name: fullName, 
+                        contact_number: contactNumber,
+                        room_name: roomName
+                    })
                 });
 
                 if (!res.ok) {
-                    const err = await res.json().catch(() => ({}));
-                    alert('Refund request failed: ' + (err.error || err.message || 'Unknown error'));
+                    let errorMsg = 'Unknown error';
+                    try {
+                        const err = await res.json();
+                        errorMsg = err.error || err.message || errorMsg;
+                    } catch (e) {
+                        errorMsg = `Server error (${res.status}): ${res.statusText}`;
+                    }
+                    console.error('Refund request failed:', errorMsg);
+                    alert('Refund request failed: ' + errorMsg);
                     window.hidePageLoader();
                     return;
                 }
 
+                const data = await res.json();
+                console.log('Refund request successful:', data);
                 closeRefundModal();
-                const user = JSON.parse(localStorage.getItem('user'));
-                await loadActiveStays(user);
+                
+                // Reload active stays
+                try {
+                    await loadActiveStays(user);
+                } catch (reloadErr) {
+                    console.warn('Could not reload active stays:', reloadErr);
+                    // Still show success even if reload fails
+                }
+                
+                alert('Refund request submitted successfully!');
                 window.hidePageLoader();
             } catch (err) {
                 window.hidePageLoader();
                 console.error('Error submitting refund request:', err);
-                alert('Network error. Please try again.');
+                alert('Network error: ' + (err.message || 'Please try again.'));
             }
         }
 

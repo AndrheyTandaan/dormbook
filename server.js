@@ -955,14 +955,22 @@ app.get('/api/bookings/user/:userId', async (req, res) => {
 app.post('/api/refund/request', async (req, res) => {
     try {
         const { user_id, booking_id, full_name, contact_number, room_name } = req.body;
+        console.log('Refund request received:', { user_id, booking_id, full_name, contact_number, room_name });
+        
         if (!user_id || !booking_id || !full_name || !contact_number || !room_name) {
             return res.status(400).json({ error: 'Missing required refund request information.' });
         }
 
         // Ensure booking exists and belongs to user
         const bookingDoc = await db.collection('bookings').doc(booking_id).get();
-        if (!bookingDoc.exists || bookingDoc.data()?.user_id !== user_id) {
-            return res.status(404).json({ error: 'Booking not found for this user.' });
+        console.log('Booking lookup:', { exists: bookingDoc.exists, booking_id, stored_user_id: bookingDoc.data()?.user_id, provided_user_id: user_id });
+        
+        if (!bookingDoc.exists) {
+            return res.status(404).json({ error: `Booking document not found with ID: ${booking_id}` });
+        }
+        
+        if (bookingDoc.data()?.user_id !== user_id) {
+            return res.status(403).json({ error: `Booking belongs to user ${bookingDoc.data()?.user_id}, not ${user_id}` });
         }
 
         const bookingData = bookingDoc.data();

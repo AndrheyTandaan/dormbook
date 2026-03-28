@@ -458,26 +458,67 @@
         async function submitRefundRequest() {
             const user = JSON.parse(localStorage.getItem('user') || '{}');
             const bookingId = document.getElementById('refund-booking-id').value;
+            const roomName = document.getElementById('refund-room-name').value;
             const fullName = document.getElementById('refund-full-name').value.trim();
             const contactNumber = document.getElementById('refund-contact-number').value.trim();
-            const roomName = document.getElementById('refund-room-name').value;
 
             if (!fullName || !contactNumber) {
                 alert('Please fill your full name and contact number.');
                 return;
             }
 
+            if (!bookingId || !user.id || !roomName) {
+                alert('Missing booking information. Please close and reopen the refund modal.');
+                return;
+            }
+
             try {
+                window.showPageLoader();
+                console.log('Submitting refund request:', { user_id: user.id, booking_id: bookingId, full_name: fullName, contact_number: contactNumber, room_name: roomName });
+                
                 const res = await fetch('/api/refund/request', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: user.id, booking_id: bookingId, full_name: fullName, contact_number: contactNumber, room_name: roomName })
+                    body: JSON.stringify({ 
+                        user_id: user.id, 
+                        booking_id: bookingId, 
+                        full_name: fullName, 
+                        contact_number: contactNumber,
+                        room_name: roomName
+                    })
                 });
 
-                if (res.ok) {
-                    alert('Refund request submitted successfully. Admin will review it shortly.');
-                    closeRefundModal();
+                if (!res.ok) {
+                    let errorMsg = 'Unknown error';
+                    try {
+                        const err = await res.json();
+                        errorMsg = err.error || err.message || errorMsg;
+                    } catch (e) {
+                        errorMsg = `Server error (${res.status}): ${res.statusText}`;
+                    }
+                    console.error('Refund request failed:', errorMsg);
+                    alert('Refund request error: ' + errorMsg);
+                    window.hidePageLoader();
+                    return;
+                }
+
+                const data = await res.json();
+                console.log('Refund request successful:', data);
+                alert('Refund request submitted successfully. Admin will review it shortly.');
+                closeRefundModal();
+                
+                try {
                     await fetchBookings(user);
+                } catch (reloadErr) {
+                    console.warn('Could not reload bookings:', reloadErr);
+                }
+                
+                window.hidePageLoader();
+            } catch (err) {
+                window.hidePageLoader();
+                console.error('Network error:', err);
+                alert('Network error: ' + (err.message || 'Please try again.'));
+            }
                 } else {
                     const err = await res.json().catch(() => ({}));
                     alert('Refund request error: ' + (err.error || err.message || 'Unable to submit.'));
