@@ -1103,6 +1103,25 @@ app.patch('/api/admin/refund-requests/:id/approve', async (req, res) => {
             console.error('Error creating refund approval notification:', notifErr);
         }
 
+        // Emit real-time updates to notify all connected clients
+        try {
+            const updatedBooking = await db.collection('bookings').doc(refund.booking_id).get();
+            if (updatedBooking.exists) {
+                io.emit('refund:approved', { 
+                    booking_id: refund.booking_id, 
+                    user_id: refund.user_id,
+                    refund_status: 'Approved',
+                    refund_amount: refund.refund_amount
+                });
+            }
+            // Also emit bookings update to refresh list
+            const snapshot = await db.collection('bookings').get();
+            const bookings = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            io.emit('bookings:updated', bookings);
+        } catch (emitErr) {
+            console.error('Error emitting real-time update:', emitErr);
+        }
+
         res.json({ success: true });
     } catch (error) {
         console.error('Error approving refund request:', error);

@@ -150,6 +150,16 @@
             bookHistorySocket.on('bookings:updated', () => fetchBookings(user));
             bookHistorySocket.on('dorms:updated', () => fetchBookings(user));
             bookHistorySocket.on('users:updated', () => fetchBookings(user));
+            
+            bookHistorySocket.on('refund:approved', (data) => {
+                if (user && data.user_id === user.id) {
+                    console.log('Refund approved notification received:', data);
+                    if (typeof fetchBookings === 'function') {
+                        fetchBookings(user);
+                    }
+                    showRefundApprovedNotification(data);
+                }
+            });
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
@@ -344,6 +354,51 @@
             `;
         }
 
+        function showRefundApprovedNotification(data) {
+            let toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.id = 'toast-container';
+                toastContainer.style.cssText = 'position: fixed; top: 100px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 12px;';
+                document.body.appendChild(toastContainer);
+            }
+
+            const toast = document.createElement('div');
+            toast.style.cssText = 'background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 16px 20px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); min-width: 320px; animation: slideIn 0.3s ease-out;';
+            toast.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <i class="fa-solid fa-check-circle" style="font-size: 20px;"></i>
+                    <div>
+                        <p style="font-weight: bold; margin: 0; font-size: 14px;">Refund Approved! ✓</p>
+                        <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9;">${data.room_name} - ₱${parseFloat(data.refund_amount || 0).toLocaleString()}</p>
+                    </div>
+                </div>
+            `;
+            
+            toastContainer.appendChild(toast);
+
+            if (!document.getElementById('toast-animation-styles')) {
+                const style = document.createElement('style');
+                style.id = 'toast-animation-styles';
+                style.textContent = `
+                    @keyframes slideIn {
+                        from { transform: translateX(400px); opacity: 0; }
+                        to { transform: translateX(0); opacity: 1; }
+                    }
+                    @keyframes slideOut {
+                        from { transform: translateX(0); opacity: 1; }
+                        to { transform: translateX(400px); opacity: 0; }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
+        }
+
         async function fetchBookings(user) {
             const container = document.getElementById('bookings-container');
             const titleEl = document.getElementById('page-title');
@@ -386,8 +441,10 @@
 
                     let refundAction = '';
                     if (user.role !== 'admin') {
-                        if (book.refund_requested) {
-                            refundAction = `<span class="px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest bg-indigo-100 text-indigo-700">Refund Pending</span>`;
+                        if (book.refund_status === 'Approved') {
+                            refundAction = `<span class="px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest bg-green-100 text-green-700 flex items-center gap-2"><i class="fa-solid fa-check-circle"></i> Refund Approved</span>`;
+                        } else if (book.refund_requested) {
+                            refundAction = `<span class="px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest bg-indigo-100 text-indigo-700 flex items-center gap-2"><i class="fa-solid fa-clock"></i> Refund Pending</span>`;
                         } else if (status === 'Approved') {
                             const safeData = JSON.stringify(book).replace(/"/g, '&quot;').replace(/'/g, "\\'");
                             refundAction = `<button onclick="openRefundModal(${safeData})" class="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase hover:bg-red-100 transition flex items-center gap-2"><i class="fa-solid fa-money-bill"></i>Request Refund</button>`;
