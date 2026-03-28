@@ -692,20 +692,21 @@ app.get('/api/dorms', async (req, res) => {
 
         for (const dormDoc of dormsSnapshot.docs) {
             const dormData = dormDoc.data();
-            // Check if dorm is occupied by counting approved bookings
+            // Check if dorm is occupied by counting active approved bookings (exclude refunded bookings)
             const bookingsSnapshot = await db.collection('bookings')
                 .where('room_name', '==', dormData.name)
                 .where('status', '==', 'Approved')
                 .get();
 
-            // Also check for case-insensitive matches (fallback for legacy data)
-            let bookingCount = bookingsSnapshot.size;
+            // Filter to only active bookings (exclude refunded ones with is_active: false)
+            let bookingCount = bookingsSnapshot.docs.filter(doc => doc.data().is_active !== false).length;
             if (bookingCount === 0) {
                 const caseInsensitiveSnapshot = await db.collection('bookings')
                     .where('status', '==', 'Approved')
                     .get();
                 bookingCount = caseInsensitiveSnapshot.docs.filter(doc => 
-                    doc.data().room_name.toLowerCase() === dormData.name.toLowerCase()
+                    doc.data().room_name.toLowerCase() === dormData.name.toLowerCase() &&
+                    doc.data().is_active !== false
                 ).length;
             }
 
@@ -895,13 +896,14 @@ app.post('/api/book', upload.single('receipt'), async (req, res) => {
 
         if (!user_id || !room_name) return res.status(400).json({ error: "Missing required booking data." });
 
-        // Enforce one booking per user (only one booking in Firestore for this user)
+        // Enforce one active booking per user (exclude refunded/inactive bookings)
         const existingBookingSnapshot = await db.collection('bookings')
             .where('user_id', '==', user_id)
             .get();
 
-        if (!existingBookingSnapshot.empty) {
-            return res.status(409).json({ error: "You already have a booking. Only one booking is allowed per user." });
+        const activeBooking = existingBookingSnapshot.docs.find(doc => doc.data().is_active !== false);
+        if (activeBooking) {
+            return res.status(409).json({ error: "You already have an active booking. Only one booking is allowed per user." });
         }
 
         // Extract duration as integer (remove " Months" suffix if present)
@@ -917,6 +919,7 @@ app.post('/api/book', upload.single('receipt'), async (req, res) => {
             receipt_url,
             amount_paid: parseFloat(amount_paid) || 0,
             status: 'Pending',
+            is_active: true,
             created_at: admin.firestore.FieldValue.serverTimestamp()
         });
 
@@ -1116,9 +1119,10 @@ app.patch('/api/admin/refund-requests/:id/approve', async (req, res) => {
             approved_at: admin.firestore.FieldValue.serverTimestamp()
         });
 
-        // Optionally update associated booking status
+        // Update associated booking: mark as inactive so room becomes available for new bookings
         if (refund?.booking_id) {
             await db.collection('bookings').doc(refund.booking_id).update({
+                is_active: false,
                 refund_status: 'Approved',
                 refund_transaction_id: transaction_id || null,
                 refund_approved_at: admin.firestore.FieldValue.serverTimestamp()

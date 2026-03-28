@@ -389,12 +389,12 @@
                 console.log('Price map:', priceMap);
 
                 const roomCounts = {};
-                allBookings.filter(b => b.status === 'Approved').forEach(b => {
+                allBookings.filter(b => b.status === 'Approved' && b.is_active !== false && b.refund_status !== 'Approved').forEach(b => {
                     const roomName = (b.room_name || '').toLowerCase().trim();
                     roomCounts[roomName] = (roomCounts[roomName] || 0) + 1;
                 });
 
-                const myStays = allBookings.filter(b => b.user_name === user.name && b.status === 'Approved');
+                const myStays = allBookings.filter(b => b.user_name === user.name && b.status === 'Approved' && b.is_active !== false && b.refund_status !== 'Approved');
                 
                 // Store user bookings in sessionStorage
                 sessionStorage.setItem('userBookings', JSON.stringify(myStays));

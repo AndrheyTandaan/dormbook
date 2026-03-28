@@ -32,7 +32,8 @@ async function refreshAdminData() {
         let occupiedCount = 0;
 
         currentBookings.forEach(b => {
-            if (b.status === 'Approved') {
+            // Only count active approved bookings (exclude refunded bookings with is_active: false)
+            if (b.status === 'Approved' && b.is_active !== false) {
                 occupiedCount++;
                 // Match booking to dorm to get the price
                 const dorm = dorms.find(d => d.id === b.room_id || d.name === b.room_name);
@@ -118,7 +119,8 @@ function renderDorms(dorms) {
     if (!inventoryList) return;
 
     inventoryList.innerHTML = dorms.map(dorm => {
-        const activeBooking = currentBookings.find(b => b.room_id === dorm.id && b.status === 'Approved');
+        // Find active approved booking (exclude inactive/refunded bookings)
+        const activeBooking = currentBookings.find(b => b.room_id === dorm.id && b.status === 'Approved' && b.is_active !== false);
         
         const isOccupied = !!activeBooking;
         const statusClass = isOccupied ? 'status-occupied' : 'status-available';

@@ -432,7 +432,7 @@
                 if (user.role === 'admin') {
                     data = data.filter(b => b.status !== 'Pending');
                 } else {
-                    const activeStays = data.filter(b => b.status === 'Approved');
+                    const activeStays = data.filter(b => b.status === 'Approved' && b.is_active !== false && b.refund_status !== 'Approved');
                     checkDueAlerts(activeStays);
                 }
 
@@ -734,7 +734,7 @@
             try {
                 const res = await fetch('/api/admin/bookings?t=' + Date.now());
                 const bookings = await res.json();
-                const myActiveRooms = bookings.filter(b => b.status === 'Approved' && b.user_name === user.name);
+                const myActiveRooms = bookings.filter(b => b.status === 'Approved' && b.user_name === user.name && b.is_active !== false && b.refund_status !== 'Approved');
                 
                 let alerts = [];
                 const today = new Date();
