@@ -177,6 +177,7 @@ body { background-color: #f9fafb; min-height: 100vh; height: auto !important; ov
                             <th class="p-6">Phone Number</th>
                             <th class="p-6">Room</th>
                             <th class="p-6">Amount</th>
+                            <th class="p-6">Requested</th>
                             <th class="p-6">Status</th>
                             <th class="p-6 text-center">Action</th>
                         </tr>
@@ -621,7 +622,7 @@ async function fetchDueDates() {
                 allRefundRequests = requests || [];
 
                 if (allRefundRequests.length === 0) {
-                    list.innerHTML = `<tr><td colspan="6" class="p-10 text-center text-gray-300 uppercase text-[10px] font-black">No refund requests</td></tr>`;
+                    list.innerHTML = `<tr><td colspan="7" class="p-10 text-center text-gray-300 uppercase text-[10px] font-black">No refund requests</td></tr>`;
                     return;
                 }
 
@@ -640,7 +641,7 @@ async function fetchDueDates() {
                 : allRefundRequests.filter(r => r.status === currentRefundFilter);
 
             if (filteredRequests.length === 0) {
-                list.innerHTML = `<tr><td colspan="6" class="p-10 text-center text-gray-300 uppercase text-[10px] font-black">No ${currentRefundFilter} refund requests</td></tr>`;
+                list.innerHTML = `<tr><td colspan="7" class="p-10 text-center text-gray-300 uppercase text-[10px] font-black">No ${currentRefundFilter} refund requests</td></tr>`;
                 return;
             }
 
@@ -648,6 +649,13 @@ async function fetchDueDates() {
                 const statusStyles = r.status === 'Approved' ? 'bg-green-100 text-green-700' : (r.status === 'Rejected' ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-700');
                 const statusIcon = r.status === 'Approved' ? '<i class="fa-solid fa-circle-check mr-1"></i>' : (r.status === 'Rejected' ? '<i class="fa-solid fa-xmark-circle mr-1"></i>' : '<i class="fa-solid fa-clock mr-1"></i>');
                 const statusBadge = `<span class="px-3 py-1 rounded-xl text-[10px] font-black uppercase ${statusStyles}">${statusIcon}${r.status}</span>`;
+
+                // Format the requested date
+                let requestedDate = 'N/A';
+                if (r.created_at) {
+                    const date = r.created_at.toDate ? r.created_at.toDate() : new Date(r.created_at);
+                    requestedDate = date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: '2-digit' });
+                }
 
                 let action = '';
                 if (r.status === 'Pending') {
@@ -661,7 +669,9 @@ async function fetchDueDates() {
                             </button>
                         </div>`;
                 } else {
-                    action = statusBadge;
+                    // For approved/rejected, show transaction ID if available
+                    const transactionInfo = r.transaction_id ? `<br><span class="text-[9px] text-gray-400">TXN: ${r.transaction_id}</span>` : '';
+                    action = statusBadge + transactionInfo;
                 }
 
                 return `
@@ -670,6 +680,7 @@ async function fetchDueDates() {
                         <td class="p-6 font-medium text-gray-500">${r.contact_number}</td>
                         <td class="p-6 font-medium text-gray-500">${r.room_name}</td>
                         <td class="p-6 font-medium text-gray-500">₱${(parseFloat(r.refund_amount) || 0).toLocaleString()}</td>
+                        <td class="p-6 text-[10px] text-gray-500 font-medium">${requestedDate}</td>
                         <td class="p-6">${statusBadge}</td>
                         <td class="p-6 text-center">${action}</td>
                     </tr>`;

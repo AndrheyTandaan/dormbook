@@ -521,8 +521,16 @@
             const refundContainer = document.getElementById('refund-history-container');
             
             try {
+                console.log('Loading refund history for user:', user.id);
                 const res = await fetch(`/api/refund/history/${user.id}?t=${Date.now()}`);
+                
+                if (!res.ok) {
+                    console.error('Refund history fetch failed:', res.status, res.statusText);
+                    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                }
+                
                 const refunds = await res.json();
+                console.log('Refund history response:', refunds);
 
                 if (!refunds || refunds.length === 0) {
                     refundContainer.innerHTML = `<div class="p-10 text-center opacity-30 text-[10px] font-black uppercase italic">No refund requests yet</div>`;
@@ -539,16 +547,30 @@
                         year: 'numeric' 
                     });
 
+                    // Format approved/rejected date if available
+                    let approvalDateText = '';
+                    if (refund.status === 'Approved' && refund.approved_at) {
+                        const approvedDate = refund.approved_at.toDate ? refund.approved_at.toDate() : new Date(refund.approved_at);
+                        const approvedDateStr = approvedDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+                        const approvedByStr = refund.approved_by ? ` by ${refund.approved_by}` : '';
+                        approvalDateText = `<p class="text-[9px] text-gray-400 font-bold uppercase mt-1">Approved: ${approvedDateStr}${approvedByStr}</p>`;
+                    } else if (refund.status === 'Rejected' && refund.rejected_at) {
+                        const rejectedDate = refund.rejected_at.toDate ? refund.rejected_at.toDate() : new Date(refund.rejected_at);
+                        const rejectedDateStr = rejectedDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+                        approvalDateText = `<p class="text-[9px] text-gray-400 font-bold uppercase mt-1">Rejected: ${rejectedDateStr}</p>`;
+                    }
+
                     const transactionInfo = refund.transaction_id ? 
                         `<p class="text-[9px] text-gray-400 font-bold uppercase mt-1">Transaction ID: <span class="font-black text-gray-600">${refund.transaction_id}</span></p>` : 
                         '';
-
+                    
                     return `
                         <div class="flex justify-between items-center p-6 bg-gray-50 rounded-2xl border border-gray-100 shadow-sm">
                             <div>
                                 <p class="text-[10px] font-black text-purple-600 uppercase mb-1">Refund Request - ${refund.room_name}</p>
                                 <h4 class="text-lg font-bold">₱${(parseFloat(refund.refund_amount) || 0).toLocaleString()}</h4>
                                 <p class="text-[9px] text-gray-400 font-bold uppercase mt-1">Requested: ${requestDate}</p>
+                                ${approvalDateText}
                                 ${transactionInfo}
                             </div>
                             <span class="px-3 py-1 rounded-xl text-[10px] font-black uppercase ${statusStyles}">${statusIcon}${refund.status}</span>
@@ -557,7 +579,7 @@
                 }).join('');
             } catch (err) {
                 console.error('Error loading refund history:', err);
-                refundContainer.innerHTML = `<div class="p-10 text-center opacity-30 text-[10px] font-black uppercase italic">Error loading refund history</div>`;
+                refundContainer.innerHTML = `<div class="p-10 text-center opacity-30 text-[10px] font-black uppercase italic">Error: ${err.message}</div>`;
             }
         }
 
@@ -803,14 +825,14 @@
             try {
                 window.showPageLoader();
                 console.log('Submitting refund request:', { user_id: user.id, booking_id: bookingId, full_name: fullName, contact_number: contactNumber, room_name: roomName });
-                
+
                 const res = await fetch('/api/refund/request', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        user_id: user.id, 
-                        booking_id: bookingId, 
-                        full_name: fullName, 
+                    body: JSON.stringify({
+                        user_id: user.id,
+                        booking_id: bookingId,
+                        full_name: fullName,
                         contact_number: contactNumber,
                         room_name: roomName
                     })
@@ -826,7 +848,6 @@
                     }
                     console.error('Refund request failed:', errorMsg);
                     alert('Refund request error: ' + errorMsg);
-                    window.hidePageLoader();
                     return;
                 }
 
@@ -834,26 +855,17 @@
                 console.log('Refund request successful:', data);
                 alert('Refund request submitted successfully. Admin will review it shortly.');
                 closeRefundModal();
-                
+
                 try {
                     await loadUserData(user);
                 } catch (reloadErr) {
                     console.warn('Could not reload user data:', reloadErr);
                 }
-                
-                window.hidePageLoader();
             } catch (err) {
-                window.hidePageLoader();
                 console.error('Network error:', err);
                 alert('Network error: ' + (err.message || 'Please try again.'));
-            }
-                } else {
-                    const err = await res.json().catch(() => ({}));
-                    alert('Refund request error: ' + (err.error || err.message || 'Unable to submit.'));
-                }
-            } catch (err) {
-                console.error('Refund request error:', err);
-                alert('Network error. Please try again.');
+            } finally {
+                window.hidePageLoader();
             }
         }
 

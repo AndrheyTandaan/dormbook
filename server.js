@@ -1034,7 +1034,16 @@ app.post('/api/refund/request', async (req, res) => {
 app.get('/api/admin/refund-requests', async (req, res) => {
     try {
         const snapshot = await db.collection('refund_requests').get();
-        const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const requests = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                created_at: data.created_at ? data.created_at.toDate?.() || data.created_at : null,
+                approved_at: data.approved_at ? data.approved_at.toDate?.() || data.approved_at : null,
+                rejected_at: data.rejected_at ? data.rejected_at.toDate?.() || data.rejected_at : null
+            };
+        });
         res.json(requests);
     } catch (error) {
         console.error('Error fetching refund requests:', error);
@@ -1046,12 +1055,42 @@ app.get('/api/admin/refund-requests', async (req, res) => {
 app.get('/api/refund/history/:userId', async (req, res) => {
     try {
         const userId = req.params.userId;
-        const snapshot = await db.collection('refund_requests')
-            .where('user_id', '==', userId)
-            .orderBy('created_at', 'desc')
-            .get();
+        console.log('Fetching refund history for user:', userId);
         
-        const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let snapshot;
+        try {
+            // Try with orderBy first (requires composite index)
+            snapshot = await db.collection('refund_requests')
+                .where('user_id', '==', userId)
+                .orderBy('created_at', 'desc')
+                .get();
+        } catch (indexError) {
+            // If composite index error, fetch without orderBy and sort in code
+            console.warn('Composite index not available, fetching without orderBy:', indexError.message);
+            snapshot = await db.collection('refund_requests')
+                .where('user_id', '==', userId)
+                .get();
+        }
+        
+        const requests = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                created_at: data.created_at ? data.created_at.toDate?.() || data.created_at : null,
+                approved_at: data.approved_at ? data.approved_at.toDate?.() || data.approved_at : null,
+                rejected_at: data.rejected_at ? data.rejected_at.toDate?.() || data.rejected_at : null
+            };
+        });
+
+        // Sort by created_at descending if not already sorted
+        requests.sort((a, b) => {
+            const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return dateB - dateA;
+        });
+
+        console.log(`Found ${requests.length} refund requests for user ${userId}`);
         res.json(requests);
     } catch (error) {
         console.error('Error fetching refund history:', error);

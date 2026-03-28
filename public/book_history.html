@@ -418,8 +418,16 @@
 
             try {
                 const endpoint = (user.role === 'admin') ? '/api/admin/bookings' : `/api/bookings/user/${user.id}`;
+                console.log('Fetching bookings from endpoint:', endpoint);
                 const response = await fetch(endpoint);
+                
+                if (!response.ok) {
+                    console.error('Bookings fetch failed:', response.status, response.statusText);
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 let data = await response.json();
+                console.log('Bookings response:', data);
                 
                 if (user.role === 'admin') {
                     data = data.filter(b => b.status !== 'Pending');
@@ -429,6 +437,7 @@
                 }
 
                 data.reverse();
+                sessionStorage.setItem('userBookings', JSON.stringify(data));
 
                 if (data.length === 0) {
                     container.innerHTML = `<div class="bg-white p-12 rounded-[2.5rem] border border-dashed border-gray-200 text-center text-gray-400 font-bold uppercase text-xs">No history found.</div>`;
@@ -452,26 +461,35 @@
                     }
 
                     return `
-                        <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between transition hover:shadow-md">
-                            <div class="flex items-center gap-5">
-                                <div class="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-indigo-600">
-                                    <i class="fa-solid ${user.role === 'admin' ? 'fa-user-graduate' : 'fa-bed'}"></i>
+                        <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 transition hover:shadow-md">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="flex items-start gap-4">
+                                    <div class="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-indigo-600">
+                                        <i class="fa-solid ${user.role === 'admin' ? 'fa-user-graduate' : 'fa-bed'}"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-black text-lg text-gray-800 uppercase tracking-tight">${user.role === 'admin' ? book.user_name : book.room_name}</h3>
+                                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Ref ID: #${book.id || 'N/A'}</p>
+                                        <p class="text-[10px] text-gray-500">${book.duration} ${Number(book.duration) === 1 ? 'Month' : 'Months'} • Start: ${book.start_date}</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h3 class="font-black text-lg text-gray-800 uppercase tracking-tight">${user.role === 'admin' ? book.user_name : book.room_name}</h3>
-                                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                        ${book.duration} ${Number(book.duration) === 1 ? 'Month' : 'Months'} • ${book.start_date}
-                                    </p>
+                                <div class="space-y-1 text-right">
+                                    <p class="text-[11px] font-bold text-gray-600">Amount Paid: <span class="font-black">₱${(parseFloat(book.amount_paid) || 0).toLocaleString()}</span></p>
+                                    <p class="text-[11px] font-bold text-gray-600">Room Type: <span class="font-black">${book.room_type || 'Standard'}</span></p>
+                                    <p class="text-[11px] font-bold text-gray-600">Status: <span class="${statusStyle} px-2 py-0.5 rounded-xl text-[9px] font-black uppercase tracking-widest">${status}</span></p>
                                 </div>
                             </div>
-                            <div class="flex flex-col items-end gap-2">
-                                <span class="${statusStyle} px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest">${status}</span>
-                                ${refundAction}
+                            <div class="mt-4 flex justify-between items-center">
+                                <div class="flex flex-wrap gap-2">
+                                    ${refundAction}
+                                </div>
+                                <small class="text-[10px] text-gray-400 uppercase tracking-widest">Updated: ${book.updated_at || book.created_at || 'N/A'}</small>
                             </div>
                         </div>`;
                 }).join('');
             } catch (err) {
-                container.innerHTML = `<p class="text-center py-10 text-red-400 font-bold uppercase text-[10px]">Failed to load history.</p>`;
+                console.error('Error loading bookings:', err);
+                container.innerHTML = `<p class="text-center py-10 text-red-400 font-bold uppercase text-[10px]">Error: ${err.message}</p>`;
             }
         }
 
@@ -532,14 +550,14 @@
             try {
                 window.showPageLoader();
                 console.log('Submitting refund request:', { user_id: user.id, booking_id: bookingId, full_name: fullName, contact_number: contactNumber, room_name: roomName });
-                
+
                 const res = await fetch('/api/refund/request', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        user_id: user.id, 
-                        booking_id: bookingId, 
-                        full_name: fullName, 
+                    body: JSON.stringify({
+                        user_id: user.id,
+                        booking_id: bookingId,
+                        full_name: fullName,
                         contact_number: contactNumber,
                         room_name: roomName
                     })
@@ -555,7 +573,6 @@
                     }
                     console.error('Refund request failed:', errorMsg);
                     alert('Refund request error: ' + errorMsg);
-                    window.hidePageLoader();
                     return;
                 }
 
@@ -563,26 +580,17 @@
                 console.log('Refund request successful:', data);
                 alert('Refund request submitted successfully. Admin will review it shortly.');
                 closeRefundModal();
-                
+
                 try {
                     await fetchBookings(user);
                 } catch (reloadErr) {
                     console.warn('Could not reload bookings:', reloadErr);
                 }
-                
-                window.hidePageLoader();
             } catch (err) {
-                window.hidePageLoader();
                 console.error('Network error:', err);
                 alert('Network error: ' + (err.message || 'Please try again.'));
-            }
-                } else {
-                    const err = await res.json().catch(() => ({}));
-                    alert('Refund request error: ' + (err.error || err.message || 'Unable to submit.'));
-                }
-            } catch (err) {
-                console.error('Refund request error:', err);
-                alert('Network error. Please try again.');
+            } finally {
+                window.hidePageLoader();
             }
         }
 
