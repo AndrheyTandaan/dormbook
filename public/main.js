@@ -372,11 +372,18 @@ async function handleBookingSubmit() {
                     <button onclick="location.reload();" class="bg-black text-white px-8 py-2.5 rounded-xl font-bold text-sm">Done</button>
                 </div>
             `;
+        } else {
+            const errData = await res.json().catch(() => ({}));
+            const errMsg = errData.error || errData.message || 'Booking failed.';
+            alert(`Booking error: ${errMsg}`);
+            confirmBtn.disabled = false;
+            confirmBtn.innerText = 'Confirm Payment';
         }
     } catch (err) {
         console.error(err);
         alert("Server error.");
         confirmBtn.disabled = false;
+        confirmBtn.innerText = 'Confirm Payment';
     }
 }
 

@@ -813,8 +813,19 @@
                 if (res.ok) {
                     closeModal();
                     window.location.href = 'book_history.html';
+                } else {
+                    if (window.hidePageLoader) window.hidePageLoader();
+                    const errData = await res.json().catch(() => ({}));
+                    const errMsg = errData.error || errData.message || 'Unable to submit booking.';
+                    alert(`Booking error: ${errMsg}`);
+                    window.location.href = 'index.html';
                 }
-            } catch (err) { console.error("Booking error:", err); }
+            } catch (err) {
+                if (window.hidePageLoader) window.hidePageLoader();
+                console.error("Booking error:", err);
+                alert('Network error. Please try again.');
+                window.location.href = 'index.html';
+            }
         });
 
         function logout() { localStorage.removeItem('user'); window.location.href = 'welcome.html'; }

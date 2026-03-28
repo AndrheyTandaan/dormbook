@@ -895,6 +895,15 @@ app.post('/api/book', upload.single('receipt'), async (req, res) => {
 
         if (!user_id || !room_name) return res.status(400).json({ error: "Missing required booking data." });
 
+        // Enforce one booking per user (only one booking in Firestore for this user)
+        const existingBookingSnapshot = await db.collection('bookings')
+            .where('user_id', '==', user_id)
+            .get();
+
+        if (!existingBookingSnapshot.empty) {
+            return res.status(409).json({ error: "You already have a booking. Only one booking is allowed per user." });
+        }
+
         // Extract duration as integer (remove " Months" suffix if present)
         const durationValue = parseInt(duration) || 1;
 
