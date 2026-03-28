@@ -282,62 +282,70 @@ function openBookingModal(name, description, roomType) {
     }
 
     const modal = document.getElementById('booking-modal');
-    const formContent = document.getElementById('modal-form-content');
+    if (!modal) {
+        console.error('Modal element not found');
+        return;
+    }
+
+    // Set the current room info for the index.html form handlers
+    const selectedDorm = allDorms.find(d => d.name === name);
+    if (!selectedDorm) {
+        console.error('Dorm not found');
+        return;
+    }
+
+    // Set global variables that the form handlers expect
+    if (typeof currentRoom === 'undefined') window.currentRoom = {};
+    currentRoom = {
+        name: name,
+        description: description,
+        room_type: roomType || 'Standard Room',
+        price: selectedDorm.price
+    };
     
+    if (typeof currentRoomPrice === 'undefined') window.currentRoomPrice = 0;
+    currentRoomPrice = parseFloat(selectedDorm.price.replace('₱', '').replace(',', '')) || 0;
+    
+    currentBookingData = {
+        user_id: null,
+        room_name: name,
+        room_type: roomType || 'Standard Room',
+        start_date: null,
+        duration: null,
+        special_request: null
+    };
+    
+    // Update the modal headers
     document.getElementById('modal-room-name').innerText = name;
     const descElement = document.getElementById('modal-room-desc');
     if (descElement) descElement.innerText = description;
 
-    formContent.innerHTML = `
-        <div class="mb-6">
-            <h3 class="text-xl font-bold text-gray-800">Reservation Details</h3>
-        </div>
-        <form id="booking-form" class="space-y-4">
-            <div class="space-y-1">
-                <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Move-in Date</label>
-                <input type="date" name="start_date" class="w-full bg-gray-50 border border-gray-100 p-4 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition" required>
-            </div>
-            <div class="space-y-1">
-                <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Duration (Months)</label>
-                <input type="number" name="duration" id="booking-duration" class="w-full bg-gray-50 border border-gray-100 p-4 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition" placeholder="e.g. 6" min="1" max="60" required>
-            </div>
-            <div class="space-y-1">
-                <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">Special Requests</label>
-                <textarea name="special_request" class="w-full bg-gray-50 border border-gray-100 p-4 rounded-xl h-24 outline-none focus:ring-2 focus:ring-indigo-500 transition" placeholder="Anything else we should know?"></textarea>
-            </div>
-            <div class="flex gap-3 pt-2">
-                <button type="button" onclick="closeModal()" class="flex-1 bg-gray-100 text-gray-500 py-4 rounded-xl font-bold hover:bg-gray-200 transition">Cancel</button>
-                <button type="submit" class="flex-[2] bg-indigo-600 text-white py-4 rounded-xl font-bold hover:bg-indigo-700 transition shadow-lg">Proceed to Payment</button>
-            </div>
-        </form>
-    `;
+    // Clear the form fields
+    const form = document.getElementById('modal-booking-form');
+    if (form) {
+        form.reset();
+    }
 
+    // Reset to step 1
+    goToStep(1);
+    selectPayment('full');
+
+    // Show the modal
     modal.classList.remove('hidden');
     document.body.classList.add('modal-open');
 
-    document.getElementById('booking-form').addEventListener('submit', (e) => {
-        e.preventDefault();
-        const user = JSON.parse(localStorage.getItem('user'));
-        const formData = new FormData(e.target);
-        const rawDuration = formData.get('duration');
-        
-        currentBookingData = {
-            user_id: user.id,
-            room_name: name,
-            room_type: roomType || 'Standard Room',
-            start_date: formData.get('start_date'),
-            duration: rawDuration + " Months", 
-            special_request: formData.get('special_request')
-        };
-        openPaymentModal();
-    });
+    // Set minimum date to today
+    const startDateInput = document.querySelector('#modal-booking-form input[name="start_date"]');
+    if (startDateInput) {
+        const today = new Date();
+        const minDate = today.toISOString().split('T')[0];
+        startDateInput.setAttribute('min', minDate);
+    }
 }
 
 function openPaymentModal() {
-    const bookingModal = document.getElementById('booking-modal');
-    const paymentModal = document.getElementById('payment-modal');
-    if (bookingModal) bookingModal.classList.add('hidden');
-    if (paymentModal) paymentModal.classList.remove('hidden');
+    // This is not needed with the current flow, kept for compatibility
+    goToStep(2);
 }
 
 async function handleBookingSubmit() {

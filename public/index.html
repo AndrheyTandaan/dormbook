@@ -65,6 +65,18 @@
             display: flex;
             animation: modalFadeIn 0.3s ease-out forwards;
         }
+        @media (max-width: 768px) {
+            #booking-modal {
+                padding: 8px;
+            }
+            .modal-content {
+                max-h: calc(100vh - 32px) !important;
+                flex-direction: column !important;
+            }
+            .modal-content > div {
+                width: 100% !important;
+            }
+        }
         @keyframes modalFadeIn {
             from { opacity: 0; backdrop-filter: blur(0px); }
             to { opacity: 1; backdrop-filter: blur(16px); }
@@ -172,12 +184,12 @@
         <main id="dorm-container" class="max-w-7xl mx-auto px-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20"></main>
     </div>
 
-    <div id="booking-modal" class="hidden fixed inset-0 z-[100] items-center justify-center p-4 bg-black/30">
-        <div class="modal-content bg-white/80 backdrop-blur-2xl w-full max-w-2xl rounded-[3rem] shadow-2xl border border-white/50 overflow-y-auto max-h-[90vh] flex flex-col md:flex-row">
-            <div class="md:w-1/2 bg-gray-900/90 text-white p-10 flex flex-col justify-between">
+    <div id="booking-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-black/30">
+        <div class="modal-content bg-white/80 backdrop-blur-2xl w-full max-w-2xl rounded-2xl sm:rounded-[3rem] shadow-2xl border border-white/50 overflow-hidden flex flex-col md:flex-row max-h-[calc(100vh-32px)] sm:max-h-[90vh]">
+            <div class="hidden md:flex md:w-1/2 bg-gray-900/90 text-white p-6 sm:p-10 flex-col justify-between">
                 <div>
                     <span class="bg-indigo-500 text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider">Booking Summary</span>
-                    <h2 id="modal-room-name" class="text-3xl font-black mt-4 italic uppercase">Selected Room</h2>
+                    <h2 id="modal-room-name" class="text-2xl sm:text-3xl font-black mt-4 italic uppercase">Selected Room</h2>
                     <p id="modal-room-desc" class="text-gray-400 text-[10px] font-bold uppercase tracking-widest mt-2 leading-relaxed">Dorm Details</p>
                 </div>
                 <button onclick="closeModal()" class="text-left text-xs font-bold text-gray-500 hover:text-white transition flex items-center gap-2">
@@ -185,9 +197,10 @@
                 </button>
             </div>
 
-            <div class="md:w-1/2 p-10 bg-white/40">
-                <form id="modal-booking-form" class="space-y-4">
-                    <div id="step-1" class="space-y-4">
+            <div class="w-full md:w-1/2 p-4 sm:p-6 md:p-10 bg-white/40 overflow-y-auto flex-1">
+                <div id="modal-form-content">
+                    <form id="modal-booking-form" class="space-y-4">
+                        <div id="step-1" class="space-y-4">
                         <h3 class="text-xl font-black uppercase mb-6 tracking-tight">Booking Details</h3>
                         <div class="space-y-1">
                             <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Move-in Date</label>
@@ -237,7 +250,8 @@
                             </button>
                         </div>
                     </div>
-                </form>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
