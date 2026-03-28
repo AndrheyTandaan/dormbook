@@ -188,8 +188,11 @@
                                 <a href="my_stay.html#balances" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
                                     <i class="fa-solid fa-wallet mr-2 text-indigo-500"></i> Balances
                                 </a>
-                                <a href="my_stay.html#due-dates" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                                <a href="my_stay.html#due-dates" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
                                     <i class="fa-solid fa-calendar-check mr-2 text-indigo-500"></i> Due Dates
+                                </a>
+                                <a href="my_stay.html#refund-history" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                                    <i class="fa-solid fa-money-bill mr-2 text-indigo-500"></i> Refunds
                                 </a>
                             </div>
                         </div>
@@ -201,6 +204,9 @@
                             <div id="management-dropdown" class="dropdown-menu absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 text-left overflow-hidden">
                                 <a href="management.html#pending-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
                                     <i class="fa-solid fa-envelope-open-text mr-2 text-indigo-500"></i> Pending Requests
+                                </a>
+                                <a href="management.html#refund-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                                    <i class="fa-solid fa-money-bill mr-2 text-indigo-500"></i> Refund Requests
                                 </a>
                                 <a href="management.html#due-dates-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
                                     <i class="fa-solid fa-calendar-day mr-2 text-indigo-500"></i> Resident Due Dates
@@ -276,6 +282,9 @@
                             <a href="my_stay.html#due-dates" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
                                 <i class="fa-solid fa-calendar-days mr-2 text-indigo-500"></i> Due Dates
                             </a>
+                            <a href="my_stay.html#refund-history" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                                <i class="fa-solid fa-money-bill mr-2 text-indigo-500"></i> Refunds
+                            </a>
                         </div>
                     </div>
                 ` : `
@@ -287,6 +296,9 @@
                         <div id="sidebar-management" class="dropdown-menu w-full bg-white rounded-2xl shadow-sm border border-gray-100 py-2 mt-1 overflow-hidden">
                             <a href="management.html#pending-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
                                 <i class="fa-solid fa-envelope-open-text mr-2 text-indigo-500"></i> Pending Requests
+                            </a>
+                            <a href="management.html#refund-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                                <i class="fa-solid fa-money-bill mr-2 text-indigo-500"></i> Refund Requests
                             </a>
                             <a href="management.html#due-dates-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
                                 <i class="fa-solid fa-calendar-day mr-2 text-indigo-500"></i> Resident Due Dates
@@ -378,7 +390,7 @@
                             refundAction = `<span class="px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest bg-indigo-100 text-indigo-700">Refund Pending</span>`;
                         } else if (status === 'Approved') {
                             const safeData = JSON.stringify(book).replace(/"/g, '&quot;').replace(/'/g, "\\'");
-                            refundAction = `<button onclick="openRefundModal(${safeData})" class="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase hover:bg-red-100 transition flex items-center gap-2"><i class="fa-solid fa-money-bill-transfer"></i>Request Refund</button>`;
+                            refundAction = `<button onclick="openRefundModal(${safeData})" class="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase hover:bg-red-100 transition flex items-center gap-2"><i class="fa-solid fa-money-bill"></i>Request Refund</button>`;
                         }
                     }
 

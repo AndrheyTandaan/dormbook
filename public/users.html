@@ -138,6 +138,9 @@
                             <a href="management.html#pending-section" class="block px-5 py-2.5 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
                                 <i class="fa-solid fa-envelope-open-text mr-2 text-indigo-500"></i> Pending Requests
                             </a>
+                            <a href="management.html#refund-section" class="block px-5 py-2.5 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                                <i class="fa-solid fa-money-bill mr-2 text-indigo-500"></i> Refund Requests
+                            </a>
                             <a href="management.html#due-dates-section" class="block px-5 py-2.5 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
                                 <i class="fa-solid fa-calendar-day mr-2 text-indigo-500"></i> Resident Due Dates
                             </a>
@@ -190,8 +193,11 @@
                         <a href="management.html#due-dates-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
                             <i class="fa-solid fa-calendar-day mr-2 text-indigo-500"></i> Resident Due Dates
                         </a>
-                        <a href="management.html#inventory-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                        <a href="management.html#inventory-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
                             <i class="fa-solid fa-door-open mr-2 text-indigo-500"></i> Room Inventory
+                        </a>
+                        <a href="management.html#refund-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                            <i class="fa-solid fa-money-bill mr-2 text-indigo-500"></i> Refund Requests
                         </a>
                     </div>
                 </div>
@@ -366,15 +372,6 @@
             await loadUsers();
             window.hidePageLoader();
         });
-            if(confirm("Permanently delete this user?")) {
-                try {
-                    await fetch(`/api/admin/users/${userId}?adminName=${currentUser.name}`, { method: 'DELETE' });
-                    loadUsers();
-                } catch (err) { alert("Error deleting user"); }
-            }
-        }
-
-        function logout() { localStorage.removeItem('user'); window.location.href = 'welcome.html'; }
     </script>
     <script src="page-loader.js"></script>
 </body>
