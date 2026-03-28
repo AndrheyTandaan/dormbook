@@ -100,7 +100,50 @@
             </div>
             <div id="due-date-container" class="space-y-4"></div>
         </section>
-    </main>
+
+        <section id="refund-history" class="section-card">
+            <div class="flex items-center gap-3 mb-8">
+                <div class="w-10 h-10 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center">
+                    <i class="fa-solid fa-money-bill-transfer"></i>
+                </div>
+                <h2 class="text-2xl font-black uppercase italic">Refund Requests</h2>
+            </div>
+            <div id="refund-history-container" class="space-y-4"></div>
+        </section>
+
+    <!-- Refund Request Modal -->
+    <div id="refund-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 animate-scale-in">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-black text-gray-900">Request Refund</h2>
+                <button onclick="closeRefundModal()" class="text-gray-400 hover:text-gray-700"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="refund-form">
+                <input type="hidden" id="refund-booking-id" />
+                <input type="hidden" id="refund-room-name" />
+                <div class="mb-4">
+                    <label class="block text-xs font-black uppercase text-gray-500 mb-1" for="refund-full-name">Full name</label>
+                    <input type="text" id="refund-full-name" class="w-full border border-gray-200 rounded-xl px-4 py-3" required />
+                </div>
+                <div class="mb-4">
+                    <label class="block text-xs font-black uppercase text-gray-500 mb-1" for="refund-contact-number">Number</label>
+                    <input type="tel" id="refund-contact-number" class="w-full border border-gray-200 rounded-xl px-4 py-3" required />
+                </div>
+                <div class="mb-6">
+                    <label class="block text-xs font-black uppercase text-gray-500 mb-1" for="refund-room-display">Booked room</label>
+                    <input type="text" id="refund-room-display" class="w-full border border-gray-200 rounded-xl px-4 py-3 bg-gray-100" readonly />
+                </div>
+                <div class="mb-6">
+                    <label class="block text-xs font-black uppercase text-gray-500 mb-1" for="refund-amount-display">Refund amount</label>
+                    <input type="text" id="refund-amount-display" class="w-full border border-gray-200 rounded-xl px-4 py-3 bg-gray-100" readonly />
+                </div>
+                <div class="flex justify-end gap-3">
+                    <button type="button" onclick="closeRefundModal()" class="px-4 py-2 rounded-xl bg-gray-100 text-gray-700 font-black uppercase text-xs">Cancel</button>
+                    <button type="button" onclick="submitRefundRequest()" class="px-4 py-2 rounded-xl bg-indigo-600 text-white font-black uppercase text-xs">Submit Request</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <script>
         const userCheck = localStorage.getItem('user');
@@ -186,8 +229,11 @@
                             <a href="#balances" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
                                 <i class="fa-solid fa-wallet mr-2 text-indigo-500"></i> Balances
                             </a>
-                            <a href="#due-dates" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                            <a href="#due-dates" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
                                 <i class="fa-solid fa-calendar-check mr-2 text-indigo-500"></i> Due Dates
+                            </a>
+                            <a href="#refund-history" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                                <i class="fa-solid fa-money-bill-transfer mr-2 text-indigo-500"></i> Refunds
                             </a>
                         </div>
                     </div>
@@ -247,6 +293,9 @@
                             </a>
                             <a href="#due-dates" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
                                 <i class="fa-solid fa-calendar-days mr-2 text-indigo-500"></i> Due Dates
+                            </a>
+                            <a href="#refund-history" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                                <i class="fa-solid fa-money-bill-transfer mr-2 text-indigo-500"></i> Refunds
                             </a>
                         </div>
                     </div>
@@ -312,14 +361,23 @@
                     const isFull = (roomCounts[roomNameKey] || 0) >= (roomMap[roomNameKey] || 1);
                     const status = isFull ? 'Booked' : 'Available';
                     const statusClass = isFull ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600';
+                    const safeData = JSON.stringify(stay).replace(/"/g, '&quot;').replace(/'/g, "\\'");
+
+                    const refundAction = stay.refund_requested ?
+                        `<span class="px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest bg-indigo-100 text-indigo-700"><i class="fa-solid fa-clock"></i> Refund Pending</span>` :
+                        `<button onclick="event.stopPropagation(); openRefundModal(${safeData})" class="px-3 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase hover:bg-red-100 transition flex items-center gap-2"><i class="fa-solid fa-money-bill-transfer"></i>Request Refund</button>`;
+
                     return `
-                        <div onclick="showBookingDetails(${JSON.stringify(stay).replace(/"/g, '&quot;')})" class="flex justify-between items-center p-6 bg-gray-50 rounded-2xl border border-gray-100 shadow-sm cursor-pointer hover:bg-gray-100 transition">
-                            <div>
+                        <div class="flex justify-between items-center p-6 bg-gray-50 rounded-2xl border border-gray-100 shadow-sm cursor-pointer hover:bg-gray-100 transition">
+                            <div onclick="showBookingDetails(${safeData})" class="cursor-pointer">
                                 <p class="text-[10px] font-black text-indigo-600 uppercase mb-1">Stay Details</p>
                                 <h4 class="text-lg font-bold">${stay.room_name}</h4>
                                 <p class="text-[9px] text-gray-400 font-bold uppercase tracking-widest italic">Booking ID: #${stay.id}</p>
                             </div>
-                            <span class="px-4 py-1 ${statusClass} text-[10px] font-black rounded-full uppercase">${status}</span>
+                            <div class="flex flex-col items-end gap-2">
+                                <span class="px-4 py-1 ${statusClass} text-[10px] font-black rounded-full uppercase">${status}</span>
+                                ${refundAction}
+                            </div>
                         </div>
                     `;
                 }).join('');
@@ -390,8 +448,55 @@
                     `;
                 }).join('');
 
+                // 4. Render Refund History
+                await loadRefundHistory(user);
+
             } catch (err) {
                 console.error("Connection error:", err);
+            }
+        }
+
+        async function loadRefundHistory(user) {
+            const refundContainer = document.getElementById('refund-history-container');
+            
+            try {
+                const res = await fetch(`/api/refund/history/${user.id}?t=${Date.now()}`);
+                const refunds = await res.json();
+
+                if (!refunds || refunds.length === 0) {
+                    refundContainer.innerHTML = `<div class="p-10 text-center opacity-30 text-[10px] font-black uppercase italic">No refund requests yet</div>`;
+                    return;
+                }
+
+                refundContainer.innerHTML = refunds.map(refund => {
+                    const statusStyles = refund.status === 'Approved' ? 'bg-green-100 text-green-700' : (refund.status === 'Rejected' ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-700');
+                    const statusIcon = refund.status === 'Approved' ? '<i class="fa-solid fa-circle-check mr-1"></i>' : (refund.status === 'Rejected' ? '<i class="fa-solid fa-xmark-circle mr-1"></i>' : '<i class="fa-solid fa-clock mr-1"></i>');
+                    
+                    const requestDate = new Date(refund.created_at).toLocaleDateString('en-PH', { 
+                        month: 'short', 
+                        day: 'numeric', 
+                        year: 'numeric' 
+                    });
+
+                    const transactionInfo = refund.transaction_id ? 
+                        `<p class="text-[9px] text-gray-400 font-bold uppercase mt-1">Transaction ID: <span class="font-black text-gray-600">${refund.transaction_id}</span></p>` : 
+                        '';
+
+                    return `
+                        <div class="flex justify-between items-center p-6 bg-gray-50 rounded-2xl border border-gray-100 shadow-sm">
+                            <div>
+                                <p class="text-[10px] font-black text-purple-600 uppercase mb-1">Refund Request - ${refund.room_name}</p>
+                                <h4 class="text-lg font-bold">₱${(parseFloat(refund.refund_amount) || 0).toLocaleString()}</h4>
+                                <p class="text-[9px] text-gray-400 font-bold uppercase mt-1">Requested: ${requestDate}</p>
+                                ${transactionInfo}
+                            </div>
+                            <span class="px-3 py-1 rounded-xl text-[10px] font-black uppercase ${statusStyles}">${statusIcon}${refund.status}</span>
+                        </div>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.error('Error loading refund history:', err);
+                refundContainer.innerHTML = `<div class="p-10 text-center opacity-30 text-[10px] font-black uppercase italic">Error loading refund history</div>`;
             }
         }
 
@@ -600,6 +705,53 @@
             if (notifId) {
                 // Mark notification as read (optional, can add API call later)
                 console.log('Dismissed notification:', notifId);
+            }
+        }
+
+        function openRefundModal(booking) {
+            document.getElementById('refund-booking-id').value = booking.id;
+            document.getElementById('refund-room-name').value = booking.room_name;
+            document.getElementById('refund-room-display').value = booking.room_name;
+            document.getElementById('refund-amount-display').value = `₱${(parseFloat(booking.amount_paid) || 0).toLocaleString()}`;
+            document.getElementById('refund-full-name').value = booking.user_name || booking.student_name || '';
+            document.getElementById('refund-contact-number').value = '';
+            document.getElementById('refund-modal').classList.remove('hidden');
+        }
+
+        function closeRefundModal() {
+            document.getElementById('refund-modal').classList.add('hidden');
+        }
+
+        async function submitRefundRequest() {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const bookingId = document.getElementById('refund-booking-id').value;
+            const roomName = document.getElementById('refund-room-name').value;
+            const fullName = document.getElementById('refund-full-name').value.trim();
+            const contactNumber = document.getElementById('refund-contact-number').value.trim();
+
+            if (!fullName || !contactNumber) {
+                alert('Please fill your full name and contact number.');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/refund/request', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: user.id, booking_id: bookingId, full_name: fullName, contact_number: contactNumber, room_name: roomName })
+                });
+
+                if (res.ok) {
+                    alert('Refund request submitted successfully. Admin will review it shortly.');
+                    closeRefundModal();
+                    await loadUserData(user);
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert('Refund request error: ' + (err.error || err.message || 'Unable to submit.'));
+                }
+            } catch (err) {
+                console.error('Refund request error:', err);
+                alert('Network error. Please try again.');
             }
         }
 

@@ -93,6 +93,31 @@ body { background-color: #f9fafb; min-height: 100vh; height: auto !important; ov
     </div>
 </div>
 
+<!-- Transaction ID Modal -->
+<div id="transaction-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-black text-gray-900">Approve Refund</h2>
+            <button onclick="closeTransactionModal()" class="text-gray-400 hover:text-gray-700"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="mb-6 p-4 bg-blue-50 rounded-2xl border border-blue-100">
+            <p class="text-sm font-bold text-blue-800">
+                <i class="fa-solid fa-info-circle mr-2"></i>
+                Refund Amount: <span id="modal-refund-amount" class="font-black">₱0</span>
+            </p>
+        </div>
+        <div class="mb-4">
+            <label class="block text-xs font-black uppercase text-gray-500 mb-2">Transaction ID (optional)</label>
+            <input type="text" id="transaction-id-input" class="w-full border border-gray-200 rounded-xl px-4 py-3" placeholder="e.g., TXN-20260328-001234" />
+            <p class="text-[10px] text-gray-400 mt-2">Auto-generated or manual reference for audit trail</p>
+        </div>
+        <div class="flex justify-end gap-3">
+            <button onclick="closeTransactionModal()" class="px-4 py-2 rounded-xl bg-gray-100 text-gray-700 font-black uppercase text-xs">Cancel</button>
+            <button onclick="submitApproveRefund()" class="px-4 py-2 rounded-xl bg-indigo-600 text-white font-black uppercase text-xs">Approve & Review</button>
+        </div>
+    </div>
+</div>
+
 <div class="max-w-7xl mx-auto px-8 pt-20">
     <div class="flex justify-between items-end py-10">
         <div>
@@ -121,6 +146,42 @@ body { background-color: #f9fafb; min-height: 100vh; height: auto !important; ov
                         </tr>
                     </thead>
                     <tbody id="admin-booking-list" class="divide-y divide-gray-50 text-sm"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Refund Requests Section -->
+        <section id="refund-section" class="mgmt-section scroll-mt-24">
+            <h2 class="text-2xl font-black mb-6 uppercase tracking-tighter">
+                <i class="fa-solid fa-money-bill-transfer text-indigo-600 mr-2"></i> Refund Requests
+            </h2>
+            <div class="mb-6 flex gap-3 flex-wrap">
+                <button onclick="filterRefundByStatus('all')" class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase hover:bg-indigo-700 transition filter-btn active" data-status="all">
+                    <i class="fa-solid fa-list mr-2"></i>All
+                </button>
+                <button onclick="filterRefundByStatus('Pending')" class="px-4 py-2 bg-orange-50 text-orange-600 rounded-xl text-xs font-black uppercase hover:bg-orange-100 transition filter-btn" data-status="Pending">
+                    <i class="fa-solid fa-clock mr-2"></i>Pending
+                </button>
+                <button onclick="filterRefundByStatus('Approved')" class="px-4 py-2 bg-green-50 text-green-600 rounded-xl text-xs font-black uppercase hover:bg-green-100 transition filter-btn" data-status="Approved">
+                    <i class="fa-solid fa-check-circle mr-2"></i>Approved
+                </button>
+                <button onclick="filterRefundByStatus('Rejected')" class="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-black uppercase hover:bg-red-100 transition filter-btn" data-status="Rejected">
+                    <i class="fa-solid fa-xmark-circle mr-2"></i>Rejected
+                </button>
+            </div>
+            <div class="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-gray-50 text-gray-400 text-[10px] font-black uppercase tracking-widest border-b">
+                        <tr>
+                            <th class="p-6">Full Name</th>
+                            <th class="p-6">Phone Number</th>
+                            <th class="p-6">Room</th>
+                            <th class="p-6">Amount</th>
+                            <th class="p-6">Status</th>
+                            <th class="p-6 text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="admin-refund-list" class="divide-y divide-gray-50 text-sm"></tbody>
                 </table>
             </div>
         </section>
@@ -163,8 +224,21 @@ body { background-color: #f9fafb; min-height: 100vh; height: auto !important; ov
 document.addEventListener('DOMContentLoaded', async () => {
     setupNavbar();
     setupRealtimeManagement();
+    
+    // Setup filter button listeners
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const status = btn.getAttribute('data-status');
+            filterRefundByStatus(status);
+        });
+    });
+    
     window.showPageLoader();
     await refreshAdminData();
+    
+    // Initialize first filter button as active
+    document.querySelector('.filter-btn[data-status="all"]')?.classList.add('active');
+    
     window.hidePageLoader();
 });
 
@@ -206,6 +280,9 @@ function setupNavbar() {
             <div id="management-dropdown" class="dropdown-menu absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 overflow-hidden">
                 <a href="#pending-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
                     <i class="fa-solid fa-envelope-open-text mr-2 text-indigo-500"></i> Pending Requests
+                </a>
+                <a href="#refund-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                    <i class="fa-solid fa-money-bill-transfer mr-2 text-indigo-500"></i> Refund Requests
                 </a>
                 <a href="#due-dates-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
                     <i class="fa-solid fa-calendar-day mr-2 text-indigo-500"></i> Resident Due Dates
@@ -269,6 +346,9 @@ function setupNavbar() {
             <a href="#pending-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
                 <i class="fa-solid fa-envelope-open-text mr-2 text-indigo-500"></i> Pending Requests
             </a>
+            <a href="#refund-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
+                <i class="fa-solid fa-money-bill-transfer mr-2 text-indigo-500"></i> Refund Requests
+            </a>
             <a href="#due-dates-section" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
                 <i class="fa-solid fa-calendar-day mr-2 text-indigo-500"></i> Resident Due Dates
             </a>
@@ -328,6 +408,7 @@ async function refreshAdminData() {
     const adminName = user ? user.name : 'Admin';
     await fetchInventory(adminName);
     await fetchPendingRequests(adminName);
+    await fetchRefundRequests(adminName);
     await fetchDueDates();
 }
 
@@ -526,6 +607,203 @@ async function fetchDueDates() {
             } catch (err) {
                 window.hidePageLoader();
                 console.error("Error updating status:", err);
+            }
+        }
+
+        let allRefundRequests = [];
+        let currentRefundFilter = 'all';
+
+        async function fetchRefundRequests(adminName) {
+            const list = document.getElementById('admin-refund-list');
+            try {
+                const res = await fetch('/api/admin/refund-requests?t=' + Date.now());
+                const requests = await res.json();
+                allRefundRequests = requests || [];
+
+                if (allRefundRequests.length === 0) {
+                    list.innerHTML = `<tr><td colspan="6" class="p-10 text-center text-gray-300 uppercase text-[10px] font-black">No refund requests</td></tr>`;
+                    return;
+                }
+
+                renderRefundTable(adminName);
+            } catch (err) {
+                console.error('Error loading refund requests:', err);
+            }
+        }
+
+        function renderRefundTable(adminName) {
+            const list = document.getElementById('admin-refund-list');
+            const safeAdminName = adminName.replace(/'/g, "\\'");
+            
+            const filteredRequests = currentRefundFilter === 'all' 
+                ? allRefundRequests 
+                : allRefundRequests.filter(r => r.status === currentRefundFilter);
+
+            if (filteredRequests.length === 0) {
+                list.innerHTML = `<tr><td colspan="6" class="p-10 text-center text-gray-300 uppercase text-[10px] font-black">No ${currentRefundFilter} refund requests</td></tr>`;
+                return;
+            }
+
+            list.innerHTML = filteredRequests.map(r => {
+                const statusStyles = r.status === 'Approved' ? 'bg-green-100 text-green-700' : (r.status === 'Rejected' ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-700');
+                const statusIcon = r.status === 'Approved' ? '<i class="fa-solid fa-circle-check mr-1"></i>' : (r.status === 'Rejected' ? '<i class="fa-solid fa-xmark-circle mr-1"></i>' : '<i class="fa-solid fa-clock mr-1"></i>');
+                const statusBadge = `<span class="px-3 py-1 rounded-xl text-[10px] font-black uppercase ${statusStyles}">${statusIcon}${r.status}</span>`;
+
+                let action = '';
+                if (r.status === 'Pending') {
+                    action = `
+                        <div class="flex justify-center gap-2">
+                            <button onclick="openTransactionModal('${r.id}', ${parseFloat(r.refund_amount) || 0})" class="px-3 py-2 bg-black text-white rounded-xl text-[10px] font-black uppercase hover:bg-indigo-600 transition flex items-center gap-2">
+                                <i class="fa-solid fa-check"></i>Approve
+                            </button>
+                            <button onclick="rejectRefundRequest('${r.id}', '${safeAdminName}')" class="px-3 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase hover:bg-red-100 transition flex items-center gap-2">
+                                <i class="fa-solid fa-xmark"></i>Reject
+                            </button>
+                        </div>`;
+                } else {
+                    action = statusBadge;
+                }
+
+                return `
+                    <tr>
+                        <td class="p-6 font-bold uppercase text-gray-800">${r.full_name}</td>
+                        <td class="p-6 font-medium text-gray-500">${r.contact_number}</td>
+                        <td class="p-6 font-medium text-gray-500">${r.room_name}</td>
+                        <td class="p-6 font-medium text-gray-500">₱${(parseFloat(r.refund_amount) || 0).toLocaleString()}</td>
+                        <td class="p-6">${statusBadge}</td>
+                        <td class="p-6 text-center">${action}</td>
+                    </tr>`;
+            }).join('');
+        }
+
+        function filterRefundByStatus(status) {
+            currentRefundFilter = status;
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`.filter-btn[data-status="${status}"]`).classList.add('active');
+            const adminName = JSON.parse(localStorage.getItem('user')).name;
+            renderRefundTable(adminName);
+        }
+
+        function openTransactionModal(refundId, amount) {
+            window.currentRefundId = refundId;
+            document.getElementById('modal-refund-amount').innerText = `₱${amount.toLocaleString()}`;
+            document.getElementById('transaction-id-input').value = '';
+            document.getElementById('transaction-modal').classList.remove('hidden');
+        }
+
+        function closeTransactionModal() {
+            document.getElementById('transaction-modal').classList.add('hidden');
+        }
+
+        async function submitApproveRefund() {
+            const refundId = window.currentRefundId;
+            const adminName = JSON.parse(localStorage.getItem('user')).name;
+            const transaction_id = document.getElementById('transaction-id-input').value.trim() || null;
+
+            try {
+                window.showPageLoader();
+                const res = await fetch(`/api/admin/refund-requests/${refundId}/approve`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ adminName, transaction_id })
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    alert('Refund approve failed: ' + (err.error || err.message || 'Unknown error'));
+                }
+                closeTransactionModal();
+                await refreshAdminData();
+                window.hidePageLoader();
+            } catch (err) {
+                window.hidePageLoader();
+                console.error('Error approving refund:', err);
+            }
+        }
+
+        async function approveRefundRequest(id, adminName) {
+            try {
+                window.showPageLoader();
+                const res = await fetch(`/api/admin/refund-requests/${id}/approve`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ adminName })
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    alert('Refund approve failed: ' + (err.error || err.message || 'Unknown error'));
+                }
+                await refreshAdminData();
+                window.hidePageLoader();
+            } catch (err) {
+                window.hidePageLoader();
+                console.error('Error approving refund:', err);
+            }
+        }
+
+        async function fetchRefundRequests_OLD(adminName) {
+            const list = document.getElementById('admin-refund-list');
+            try {
+                const res = await fetch('/api/admin/refund-requests?t=' + Date.now());
+                const requests = await res.json();
+
+                if (!requests || requests.length === 0) {
+                    list.innerHTML = `<tr><td colspan="6" class="p-10 text-center text-gray-300 uppercase text-[10px] font-black">No refund requests</td></tr>`;
+                    return;
+                }
+
+                const safeAdminName = adminName.replace(/'/g, "\\'");
+                list.innerHTML = requests.map(r => {
+                    const statusStyles = r.status === 'Approved' ? 'bg-green-100 text-green-700' : (r.status === 'Rejected' ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-700');
+                    const statusIcon = r.status === 'Approved' ? '<i class="fa-solid fa-circle-check mr-1"></i>' : (r.status === 'Rejected' ? '<i class="fa-solid fa-xmark-circle mr-1"></i>' : '<i class="fa-solid fa-clock mr-1"></i>');
+                    const statusBadge = `<span class="px-3 py-1 rounded-xl text-[10px] font-black uppercase ${statusStyles}">${statusIcon}${r.status}</span>`;
+
+                    let action = '';
+                    if (r.status === 'Pending') {
+                        action = `
+                            <div class="flex justify-center gap-2">
+                                <button onclick="approveRefundRequest('${r.id}', '${safeAdminName}')" class="px-3 py-2 bg-black text-white rounded-xl text-[10px] font-black uppercase hover:bg-indigo-600 transition flex items-center gap-2">
+                                    <i class="fa-solid fa-check"></i>Approve
+                                </button>
+                                <button onclick="rejectRefundRequest('${r.id}', '${safeAdminName}')" class="px-3 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase hover:bg-red-100 transition flex items-center gap-2">
+                                    <i class="fa-solid fa-xmark"></i>Reject
+                                </button>
+                            </div>`;
+                    } else {
+                        action = statusBadge;
+                    }
+
+                    return `
+                        <tr>
+                            <td class="p-6 font-bold uppercase text-gray-800">${r.full_name}</td>
+                            <td class="p-6 font-medium text-gray-500">${r.contact_number}</td>
+                            <td class="p-6 font-medium text-gray-500">${r.room_name}</td>
+                            <td class="p-6 font-medium text-gray-500">₱${(parseFloat(r.refund_amount) || 0).toLocaleString()}</td>
+                            <td class="p-6">${statusBadge}</td>
+                            <td class="p-6 text-center">${action}</td>
+                        </tr>`;
+                }).join('');
+            } catch (err) {
+                console.error('Error loading refund requests:', err);
+            }
+        }
+
+        async function rejectRefundRequest(id, adminName) {
+            try {
+                window.showPageLoader();
+                const res = await fetch(`/api/admin/refund-requests/${id}/reject`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ adminName })
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    alert('Refund reject failed: ' + (err.error || err.message || 'Unknown error'));
+                }
+                await refreshAdminData();
+                window.hidePageLoader();
+            } catch (err) {
+                window.hidePageLoader();
+                console.error('Error rejecting refund:', err);
             }
         }
 

@@ -951,6 +951,205 @@ app.get('/api/bookings/user/:userId', async (req, res) => {
     }
 });
 
+// Create a new refund request from user
+app.post('/api/refund/request', async (req, res) => {
+    try {
+        const { user_id, booking_id, full_name, contact_number, room_name } = req.body;
+        if (!user_id || !booking_id || !full_name || !contact_number || !room_name) {
+            return res.status(400).json({ error: 'Missing required refund request information.' });
+        }
+
+        // Ensure booking exists and belongs to user
+        const bookingDoc = await db.collection('bookings').doc(booking_id).get();
+        if (!bookingDoc.exists || bookingDoc.data()?.user_id !== user_id) {
+            return res.status(404).json({ error: 'Booking not found for this user.' });
+        }
+
+        const bookingData = bookingDoc.data();
+
+        // Fail-safe: only approved bookings can request refunds
+        if (bookingData.status !== 'Approved') {
+            return res.status(400).json({ error: 'Only approved bookings can request refunds.' });
+        }
+
+        // Prevent duplicate request
+        const existingSnapshot = await db.collection('refund_requests')
+            .where('booking_id', '==', booking_id)
+            .where('status', 'in', ['Pending', 'Approved'])
+            .get();
+
+        if (!existingSnapshot.empty) {
+            return res.status(409).json({ error: 'Refund request already exists for this booking.' });
+        }
+
+        // Refund amount derived from actual booking payment—user cannot set this value
+        const refundAmount = parseFloat(bookingData.amount_paid) || 0;
+
+        const requestRef = await db.collection('refund_requests').add({
+            user_id,
+            booking_id,
+            full_name,
+            contact_number,
+            room_name,
+            refund_amount: refundAmount,
+            status: 'Pending',
+            created_at: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Mark booking as having pending refund request
+        await db.collection('bookings').doc(booking_id).update({ refund_requested: true, refund_amount: refundAmount });
+
+        // Notify user about request receipt
+        await db.collection('notifications').add({
+            user_id,
+            booking_id,
+            room_name,
+            status: 'Pending',
+            message: `Refund request for ${room_name} (₱${refundAmount.toLocaleString()}) submitted.`,
+            read: false,
+            created_at: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        await db.collection('users').doc(user_id).update({
+            notif_badge_viewed_at: null,
+            notif_badge_unread: true
+        });
+
+        res.json({ success: true, refundId: requestRef.id, refund_amount: refundAmount });
+    } catch (error) {
+        console.error('Error creating refund request:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Admin: list refund requests
+app.get('/api/admin/refund-requests', async (req, res) => {
+    try {
+        const snapshot = await db.collection('refund_requests').get();
+        const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        res.json(requests);
+    } catch (error) {
+        console.error('Error fetching refund requests:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// User: get refund history
+app.get('/api/refund/history/:userId', async (req, res) => {
+    try {
+        const userId = req.params.userId;
+        const snapshot = await db.collection('refund_requests')
+            .where('user_id', '==', userId)
+            .orderBy('created_at', 'desc')
+            .get();
+        
+        const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        res.json(requests);
+    } catch (error) {
+        console.error('Error fetching refund history:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Admin approve refund request
+app.patch('/api/admin/refund-requests/:id/approve', async (req, res) => {
+    try {
+        const { adminName, transaction_id } = req.body;
+        const id = req.params.id;
+
+        const refundDoc = await db.collection('refund_requests').doc(id).get();
+        if (!refundDoc.exists) return res.status(404).json({ error: 'Refund request not found.' });
+
+        const refund = refundDoc.data();
+
+        await db.collection('refund_requests').doc(id).update({
+            status: 'Approved',
+            approved_by: adminName || 'Admin',
+            transaction_id: transaction_id || null,
+            approved_at: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Optionally update associated booking status
+        if (refund?.booking_id) {
+            await db.collection('bookings').doc(refund.booking_id).update({
+                refund_status: 'Approved',
+                refund_transaction_id: transaction_id || null,
+                refund_approved_at: admin.firestore.FieldValue.serverTimestamp()
+            });
+        }
+
+        // Notify user about refund approval
+        try {
+            const txnMsg = transaction_id ? ` Transaction ID: ${transaction_id}.` : '';
+            await db.collection('notifications').add({
+                user_id: refund.user_id,
+                booking_id: refund.booking_id,
+                room_name: refund.room_name,
+                status: 'Refund Approved',
+                message: `Your refund request for ${refund.room_name} has been approved (₱${refund.refund_amount || 0}).${txnMsg}`, 
+                read: false,
+                created_at: admin.firestore.FieldValue.serverTimestamp()
+            });
+            await db.collection('users').doc(refund.user_id).update({ notif_badge_viewed_at: null, notif_badge_unread: true });
+        } catch (notifErr) {
+            console.error('Error creating refund approval notification:', notifErr);
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error approving refund request:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Admin reject refund request
+app.patch('/api/admin/refund-requests/:id/reject', async (req, res) => {
+    try {
+        const { adminName } = req.body;
+        const id = req.params.id;
+
+        const refundDoc = await db.collection('refund_requests').doc(id).get();
+        if (!refundDoc.exists) return res.status(404).json({ error: 'Refund request not found.' });
+
+        const refund = refundDoc.data();
+
+        await db.collection('refund_requests').doc(id).update({
+            status: 'Rejected',
+            approved_by: adminName || 'Admin',
+            rejected_at: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Optionally clear booking refund flag
+        if (refund?.booking_id) {
+            await db.collection('bookings').doc(refund.booking_id).update({
+                refund_requested: false,
+                refund_status: 'Rejected'
+            });
+        }
+
+        // Notify user about refund rejection
+        try {
+            await db.collection('notifications').add({
+                user_id: refund.user_id,
+                booking_id: refund.booking_id,
+                room_name: refund.room_name,
+                status: 'Refund Rejected',
+                message: `Your refund request for ${refund.room_name} has been rejected.`,
+                read: false,
+                created_at: admin.firestore.FieldValue.serverTimestamp()
+            });
+            await db.collection('users').doc(refund.user_id).update({ notif_badge_viewed_at: null, notif_badge_unread: true });
+        } catch (notifErr) {
+            console.error('Error creating refund rejection notification:', notifErr);
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error rejecting refund request:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.patch('/api/bookings/:id/status', async (req, res) => {
     try {
         const { status, adminName } = req.body;
