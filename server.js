@@ -901,7 +901,17 @@ app.post('/api/book', upload.single('receipt'), async (req, res) => {
             .where('user_id', '==', user_id)
             .get();
 
+        // Filter out refunded/inactive bookings (marked as inactive when refund is approved)
+        const userBookings = existingBookingSnapshot.docs.map(doc => doc.data());
         const activeBooking = existingBookingSnapshot.docs.find(doc => doc.data().is_active !== false);
+        
+        console.log('Booking Creation - User Active Status:', {
+            user_id,
+            total_user_bookings: userBookings.length,
+            refunded_bookings: userBookings.filter(b => b.is_active === false).length,
+            active_bookings: userBookings.filter(b => b.is_active !== false).length
+        });
+        
         if (activeBooking) {
             return res.status(409).json({ error: "You already have an active booking. Only one booking is allowed per user." });
         }
@@ -1111,6 +1121,14 @@ app.patch('/api/admin/refund-requests/:id/approve', async (req, res) => {
         if (!refundDoc.exists) return res.status(404).json({ error: 'Refund request not found.' });
 
         const refund = refundDoc.data();
+        console.log('Processing Refund Approval:', {
+            refund_id: id,
+            user_id: refund.user_id,
+            booking_id: refund.booking_id,
+            room_name: refund.room_name,
+            refund_amount: refund.refund_amount,
+            approved_by: adminName
+        });
 
         await db.collection('refund_requests').doc(id).update({
             status: 'Approved',
@@ -1120,12 +1138,22 @@ app.patch('/api/admin/refund-requests/:id/approve', async (req, res) => {
         });
 
         // Update associated booking: mark as inactive so room becomes available for new bookings
+        // This automatically clears due dates and balances on frontend (filtered by is_active !== false)
+        // User can now book again as the "one active booking per user" check excludes inactive bookings
         if (refund?.booking_id) {
             await db.collection('bookings').doc(refund.booking_id).update({
+                is_active: false,                                              // Mark stay as inactive
+                refund_status: 'Approved',                                     // Record refund status
+                refund_transaction_id: transaction_id || null,                 // Store transaction reference
+                refund_approved_at: admin.firestore.FieldValue.serverTimestamp(),  // Record approval timestamp
+                // Note: amount_paid, duration, and start_date are kept for audit trail purposes
+                // Frontend filtering (is_active !== false) ensures these don't display in My Stay
+            });
+            
+            console.log('Booking marked as inactive (refunded):', {
+                booking_id: refund.booking_id,
                 is_active: false,
-                refund_status: 'Approved',
-                refund_transaction_id: transaction_id || null,
-                refund_approved_at: admin.firestore.FieldValue.serverTimestamp()
+                refund_status: 'Approved'
             });
         }
 
@@ -1153,14 +1181,17 @@ app.patch('/api/admin/refund-requests/:id/approve', async (req, res) => {
                 io.emit('refund:approved', { 
                     booking_id: refund.booking_id, 
                     user_id: refund.user_id,
+                    room_name: refund.room_name,                      // Include room for notification
                     refund_status: 'Approved',
                     refund_amount: refund.refund_amount
                 });
+                console.log('Emitted refund:approved event for user:', refund.user_id);
             }
-            // Also emit bookings update to refresh list
+            // Also emit bookings update to refresh list (triggers immediate reload)
             const snapshot = await db.collection('bookings').get();
             const bookings = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             io.emit('bookings:updated', bookings);
+            console.log('Emitted bookings:updated event to all clients');
         } catch (emitErr) {
             console.error('Error emitting real-time update:', emitErr);
         }
