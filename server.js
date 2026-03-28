@@ -10,6 +10,7 @@ const session = require('express-session');
 const passport = require('passport');
 const http = require('http');
 const { Server } = require('socket.io');
+const sqlite3 = require('sqlite3').verbose();
 
 const admin = require("firebase-admin");
 
@@ -74,6 +75,125 @@ async function initializeFirestore() {
 
 // Initialize Firestore data
 initializeFirestore();
+
+// --- SQLITE3 INITIALIZATION ---
+const dbPath = path.join(__dirname, 'db', 'dormbook.db');
+const sqlite3db = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+        console.error('Failed to open SQLite DB:', err.message);
+    } else {
+        console.log('✅ SQLite3 connected at:', dbPath);
+    }
+});
+
+// Initialize SQLite tables
+sqlite3db.serialize(() => {
+    sqlite3db.run(`CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        email TEXT UNIQUE,
+        password TEXT,
+        role TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`, (err) => { 
+        if (err) console.error("SQLite users table error:", err); 
+        else console.log("✔ SQLite users table ready"); 
+    });
+
+    sqlite3db.run(`CREATE TABLE IF NOT EXISTS dorms (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        price TEXT,
+        description TEXT,
+        image_url TEXT
+    )`, (err) => { 
+        if (err) console.error("SQLite dorms table error:", err); 
+        else console.log("✔ SQLite dorms table ready"); 
+    });
+
+    sqlite3db.run(`CREATE TABLE IF NOT EXISTS bookings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        room_name TEXT,
+        start_date TEXT,
+        duration TEXT,
+        special_request TEXT,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )`, (err) => { 
+        if (err) console.error("SQLite bookings table error:", err); 
+        else console.log("✔ SQLite bookings table ready"); 
+    });
+
+    sqlite3db.run(`CREATE TABLE IF NOT EXISTS action_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        admin_name TEXT,
+        action_details TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`, (err) => { 
+        if (err) console.error("SQLite action_logs table error:", err); 
+        else console.log("✔ SQLite action_logs table ready"); 
+    });
+});
+
+// --- SYNC DATA FROM FIREBASE TO SQLITE3 ---
+async function syncFirebaseToSQLite() {
+    try {
+        console.log('🔄 Starting Firebase to SQLite sync...');
+
+        // Sync Users
+        const usersSnapshot = await db.collection('users').get();
+        usersSnapshot.forEach((doc) => {
+            const user = doc.data();
+            const query = `INSERT OR REPLACE INTO users (name, email, password, role) VALUES (?, ?, ?, ?)`;
+            sqlite3db.run(query, [user.name || '', user.email || '', user.password || '', user.role || 'student'], (err) => {
+                if (err) console.error('Error syncing user:', err);
+            });
+        });
+
+        // Sync Dorms
+        const dormsSnapshot = await db.collection('dorms').get();
+        dormsSnapshot.forEach((doc) => {
+            const dorm = doc.data();
+            const query = `INSERT OR REPLACE INTO dorms (name, price, description, image_url) VALUES (?, ?, ?, ?)`;
+            sqlite3db.run(query, [dorm.name || '', dorm.price || '', dorm.description || '', dorm.image_url || ''], (err) => {
+                if (err) console.error('Error syncing dorm:', err);
+            });
+        });
+
+        // Sync Bookings
+        const bookingsSnapshot = await db.collection('bookings').get();
+        bookingsSnapshot.forEach((doc) => {
+            const booking = doc.data();
+            const query = `INSERT OR REPLACE INTO bookings (user_id, room_name, start_date, duration, special_request) VALUES (?, ?, ?, ?, ?)`;
+            sqlite3db.run(query, [
+                booking.user_id || 1, 
+                booking.room_name || '', 
+                booking.start_date || '', 
+                booking.duration || '', 
+                booking.special_request || ''
+            ], (err) => {
+                if (err) console.error('Error syncing booking:', err);
+            });
+        });
+
+        // Sync Action Logs
+        const logsSnapshot = await db.collection('action_logs').get();
+        logsSnapshot.forEach((doc) => {
+            const log = doc.data();
+            const query = `INSERT OR REPLACE INTO action_logs (admin_name, action_details) VALUES (?, ?)`;
+            sqlite3db.run(query, [log.admin_name || '', log.action_details || ''], (err) => {
+                if (err) console.error('Error syncing action log:', err);
+            });
+        });
+
+        console.log('✅ Firebase to SQLite sync completed!');
+    } catch (error) {
+        console.error('Error syncing Firebase to SQLite:', error);
+    }
+}
+
+// Run sync after a short delay to ensure tables are created
+setTimeout(syncFirebaseToSQLite, 2000);
 
 // --- MULTER CONFIGURATION ---
 const storage = multer.diskStorage({
