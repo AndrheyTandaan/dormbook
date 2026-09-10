@@ -100,7 +100,50 @@
             </div>
             <div id="due-date-container" class="space-y-4"></div>
         </section>
-    </main>
+
+        <section id="refund-history" class="section-card">
+            <div class="flex items-center gap-3 mb-8">
+                <div class="w-10 h-10 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center">
+                    <i class="fa-solid fa-money-bill"></i>
+                </div>
+                <h2 class="text-2xl font-black uppercase italic">Refund Requests</h2>
+            </div>
+            <div id="refund-history-container" class="space-y-4"></div>
+        </section>
+
+    <!-- Refund Request Modal -->
+    <div id="refund-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 animate-scale-in">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-black text-gray-900">Request Refund</h2>
+                <button onclick="closeRefundModal()" class="text-gray-400 hover:text-gray-700"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="refund-form">
+                <input type="hidden" id="refund-booking-id" />
+                <input type="hidden" id="refund-room-name" />
+                <div class="mb-4">
+                    <label class="block text-xs font-black uppercase text-gray-500 mb-1" for="refund-full-name">Full name</label>
+                    <input type="text" id="refund-full-name" class="w-full border border-gray-200 rounded-xl px-4 py-3" required />
+                </div>
+                <div class="mb-4">
+                    <label class="block text-xs font-black uppercase text-gray-500 mb-1" for="refund-contact-number">Number</label>
+                    <input type="tel" id="refund-contact-number" class="w-full border border-gray-200 rounded-xl px-4 py-3" required />
+                </div>
+                <div class="mb-6">
+                    <label class="block text-xs font-black uppercase text-gray-500 mb-1" for="refund-room-display">Booked room</label>
+                    <input type="text" id="refund-room-display" class="w-full border border-gray-200 rounded-xl px-4 py-3 bg-gray-100" readonly />
+                </div>
+                <div class="mb-6">
+                    <label class="block text-xs font-black uppercase text-gray-500 mb-1" for="refund-amount-display">Refund amount</label>
+                    <input type="text" id="refund-amount-display" class="w-full border border-gray-200 rounded-xl px-4 py-3 bg-gray-100" readonly />
+                </div>
+                <div class="flex justify-end gap-3">
+                    <button type="button" onclick="closeRefundModal()" class="px-4 py-2 rounded-xl bg-gray-100 text-gray-700 font-black uppercase text-xs">Cancel</button>
+                    <button type="button" onclick="submitRefundRequest()" class="px-4 py-2 rounded-xl bg-indigo-600 text-white font-black uppercase text-xs">Submit Request</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <script>
         const userCheck = localStorage.getItem('user');
@@ -149,9 +192,34 @@
             }
             myStaySocket = io();
             myStaySocket.on('connect', () => console.info('my_stay socket connected', myStaySocket.id));
-            myStaySocket.on('bookings:updated', () => loadUserData(user));
+            myStaySocket.on('bookings:updated', () => {
+                console.log('Bookings updated event received, reloading...');
+                loadUserData(user);
+            });
             myStaySocket.on('users:updated', () => loadUserData(user));
             myStaySocket.on('dorms:updated', () => loadUserData(user));
+            
+            myStaySocket.on('refund:approved', (data) => {
+                console.log('Refund approved event received:', data);
+                if (user && data.user_id === user.id) {
+                    console.log('✓ Refund approved for current user - reloading page data');
+                    // Force immediate reload of user data
+                    loadUserData(user);
+                    // Also show notification
+                    showRefundApprovedNotification(data);
+                    // Clear any cached session data to force fresh fetch
+                    sessionStorage.removeItem('userBookings');
+                } else {
+                    console.log('Refund not for current user:', { 
+                        current_user: user?.id, 
+                        refund_user: data.user_id 
+                    });
+                }
+            });
+            
+            myStaySocket.on('disconnect', () => {
+                console.warn('My Stay socket disconnected');
+            });
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
@@ -186,8 +254,11 @@
                             <a href="#balances" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
                                 <i class="fa-solid fa-wallet mr-2 text-indigo-500"></i> Balances
                             </a>
-                            <a href="#due-dates" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                            <a href="#due-dates" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition border-b border-gray-50">
                                 <i class="fa-solid fa-calendar-check mr-2 text-indigo-500"></i> Due Dates
+                            </a>
+                            <a href="#refund-history" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                                <i class="fa-solid fa-money-bill mr-2 text-indigo-500"></i> Refunds
                             </a>
                         </div>
                     </div>
@@ -248,6 +319,9 @@
                             <a href="#due-dates" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
                                 <i class="fa-solid fa-calendar-days mr-2 text-indigo-500"></i> Due Dates
                             </a>
+                            <a href="#refund-history" class="block px-5 py-3 text-[10px] font-black uppercase text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition">
+                                <i class="fa-solid fa-money-bill mr-2 text-indigo-500"></i> Refunds
+                            </a>
                         </div>
                     </div>
                 ` : ''}
@@ -255,6 +329,51 @@
                     <i class="fa-solid fa-clock-rotate-left"></i> History
                 </a>
                 `;
+        }
+
+        function showRefundApprovedNotification(data) {
+            let toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.id = 'toast-container';
+                toastContainer.style.cssText = 'position: fixed; top: 100px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 12px;';
+                document.body.appendChild(toastContainer);
+            }
+
+            const toast = document.createElement('div');
+            toast.style.cssText = 'background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 16px 20px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); min-width: 320px; animation: slideIn 0.3s ease-out;';
+            toast.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <i class="fa-solid fa-check-circle" style="font-size: 20px;"></i>
+                    <div>
+                        <p style="font-weight: bold; margin: 0; font-size: 14px;">Refund Approved! ✓</p>
+                        <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9;">${data.room_name} - ₱${parseFloat(data.refund_amount || 0).toLocaleString()}</p>
+                    </div>
+                </div>
+            `;
+            
+            toastContainer.appendChild(toast);
+
+            if (!document.getElementById('toast-animation-styles')) {
+                const style = document.createElement('style');
+                style.id = 'toast-animation-styles';
+                style.textContent = `
+                    @keyframes slideIn {
+                        from { transform: translateX(400px); opacity: 0; }
+                        to { transform: translateX(0); opacity: 1; }
+                    }
+                    @keyframes slideOut {
+                        from { transform: translateX(0); opacity: 1; }
+                        to { transform: translateX(400px); opacity: 0; }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
         }
 
         async function loadUserData(user) {
@@ -284,13 +403,43 @@
                 console.log('Rooms data:', rooms);
                 console.log('Price map:', priceMap);
 
+                // Helper to check if a stay is still active (not refunded)
+                const isActiveStay = (booking) => {
+                    // Exclude if marked as inactive (refunded bookings set is_active: false)
+                    if (booking.is_active === false) return false;
+                    // Exclude if refund was approved
+                    if (booking.refund_status === 'Approved') return false;
+                    return true;
+                };
+
                 const roomCounts = {};
-                allBookings.filter(b => b.status === 'Approved').forEach(b => {
+                allBookings.filter(b => b.status === 'Approved' && isActiveStay(b)).forEach(b => {
                     const roomName = (b.room_name || '').toLowerCase().trim();
                     roomCounts[roomName] = (roomCounts[roomName] || 0) + 1;
                 });
 
-                const myStays = allBookings.filter(b => b.user_name === user.name && b.status === 'Approved');
+                // Filter stays: only show active, approved stays that aren't refunded
+                const myStays = allBookings.filter(b => 
+                    b.user_name === user.name && 
+                    b.status === 'Approved' && 
+                    isActiveStay(b)
+                );
+                
+                // Detailed logging for debugging
+                const allUserBookings = allBookings.filter(b => b.user_name === user.name);
+                const refundedStays = allUserBookings.filter(b => !isActiveStay(b));
+                console.log('User Stays Filter:', {
+                    total_bookings: allBookings.length,
+                    user_bookings: allUserBookings.length,
+                    active_stays: myStays.length,
+                    refunded_stays: refundedStays.length,
+                    refunded_details: refundedStays.map(s => ({ 
+                        id: s.id, 
+                        room: s.room_name, 
+                        is_active: s.is_active, 
+                        refund_status: s.refund_status 
+                    }))
+                });
                 
                 // Store user bookings in sessionStorage
                 sessionStorage.setItem('userBookings', JSON.stringify(myStays));
@@ -306,26 +455,54 @@
                     return;
                 }
 
-                // 1. Render Bookings
-                bookingContainer.innerHTML = myStays.map(stay => {
+                // 1. Render Bookings - with defensive filter against refunded stays
+                bookingContainer.innerHTML = myStays
+                    .filter(stay => {
+                        // Defensive check: exclude any stay that shouldn't be displayed
+                        if (stay.is_active === false) {
+                            console.warn('Filtering out inactive stay before render:', stay.id);
+                            return false;
+                        }
+                        if (stay.refund_status === 'Approved') {
+                            console.warn('Filtering out refunded stay before render:', stay.id);
+                            return false;
+                        }
+                        return true;
+                    })
+                    .map(stay => {
                     const roomNameKey = (stay.room_name || '').toLowerCase().trim();
                     const isFull = (roomCounts[roomNameKey] || 0) >= (roomMap[roomNameKey] || 1);
                     const status = isFull ? 'Booked' : 'Available';
                     const statusClass = isFull ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600';
+                    const safeData = JSON.stringify(stay).replace(/"/g, '&quot;').replace(/'/g, "\\'");
+
+                    let refundAction = '';
+                    
+                    if (stay.refund_requested) {
+                        refundAction = `<span class="px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest bg-indigo-100 text-indigo-700 flex items-center gap-2"><i class="fa-solid fa-clock"></i> Refund Pending</span>`;
+                    } else {
+                        refundAction = `<button onclick="event.stopPropagation(); openRefundModal(${safeData})" class="px-3 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase hover:bg-red-100 transition flex items-center gap-2"><i class="fa-solid fa-money-bill"></i>Request Refund</button>`;
+                    }
+
                     return `
-                        <div onclick="showBookingDetails(${JSON.stringify(stay).replace(/"/g, '&quot;')})" class="flex justify-between items-center p-6 bg-gray-50 rounded-2xl border border-gray-100 shadow-sm cursor-pointer hover:bg-gray-100 transition">
-                            <div>
+                        <div class="flex justify-between items-center p-6 bg-gray-50 rounded-2xl border border-gray-100 shadow-sm cursor-pointer hover:bg-gray-100 transition">
+                            <div onclick="showBookingDetails(${safeData})" class="cursor-pointer">
                                 <p class="text-[10px] font-black text-indigo-600 uppercase mb-1">Stay Details</p>
                                 <h4 class="text-lg font-bold">${stay.room_name}</h4>
                                 <p class="text-[9px] text-gray-400 font-bold uppercase tracking-widest italic">Booking ID: #${stay.id}</p>
                             </div>
-                            <span class="px-4 py-1 ${statusClass} text-[10px] font-black rounded-full uppercase">${status}</span>
+                            <div class="flex flex-col items-end gap-2">
+                                <span class="px-4 py-1 ${statusClass} text-[10px] font-black rounded-full uppercase">${status}</span>
+                                ${refundAction}
+                            </div>
                         </div>
                     `;
                 }).join('');
 
-                // 2. Render Balances
-                balanceContainer.innerHTML = myStays.map(stay => {
+                // 2. Render Balances - with defensive filter
+                balanceContainer.innerHTML = myStays
+                    .filter(stay => stay.is_active !== false && stay.refund_status !== 'Approved')
+                    .map(stay => {
                     // Try exact match first, then case-insensitive
                     let monthlyPrice = priceMap[stay.room_name] || 0;
                     if (monthlyPrice === 0 && stay.room_name) {
@@ -363,8 +540,10 @@
                     `;
                 }).join('');
 
-                // 3. Render Due Dates
-                dueContainer.innerHTML = myStays.map(stay => {
+                // 3. Render Due Dates - with defensive filter
+                dueContainer.innerHTML = myStays
+                    .filter(stay => stay.is_active !== false && stay.refund_status !== 'Approved')
+                    .map(stay => {
                     const moveInDate = new Date(stay.start_date);
                     const dueDate = new Date(moveInDate);
                     dueDate.setMonth(moveInDate.getMonth() + 1);
@@ -390,8 +569,77 @@
                     `;
                 }).join('');
 
+                // 4. Render Refund History
+                await loadRefundHistory(user);
+
             } catch (err) {
                 console.error("Connection error:", err);
+            }
+        }
+
+        async function loadRefundHistory(user) {
+            const refundContainer = document.getElementById('refund-history-container');
+            
+            try {
+                console.log('Loading refund history for user:', user.id);
+                const res = await fetch(`/api/refund/history/${user.id}?t=${Date.now()}`);
+                
+                if (!res.ok) {
+                    console.error('Refund history fetch failed:', res.status, res.statusText);
+                    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                }
+                
+                const refunds = await res.json();
+                console.log('Refund history response:', refunds);
+
+                if (!refunds || refunds.length === 0) {
+                    refundContainer.innerHTML = `<div class="p-10 text-center opacity-30 text-[10px] font-black uppercase italic">No refund requests yet</div>`;
+                    return;
+                }
+
+                refundContainer.innerHTML = refunds.map(refund => {
+                    const statusStyles = refund.status === 'Approved' ? 'bg-green-100 text-green-700' : (refund.status === 'Rejected' ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-700');
+                    const statusIcon = refund.status === 'Approved' ? '<i class="fa-solid fa-circle-check mr-1"></i>' : (refund.status === 'Rejected' ? '<i class="fa-solid fa-xmark-circle mr-1"></i>' : '<i class="fa-solid fa-clock mr-1"></i>');
+                    
+                    const requestDate = new Date(refund.created_at).toLocaleDateString('en-PH', { 
+                        month: 'short', 
+                        day: 'numeric', 
+                        year: 'numeric' 
+                    });
+
+                    // Format approved/rejected date if available
+                    let approvalDateText = '';
+                    if (refund.status === 'Approved' && refund.approved_at) {
+                        const approvedDate = refund.approved_at.toDate ? refund.approved_at.toDate() : new Date(refund.approved_at);
+                        const approvedDateStr = approvedDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+                        const approvedByStr = refund.approved_by ? ` by ${refund.approved_by}` : '';
+                        approvalDateText = `<p class="text-[9px] text-gray-400 font-bold uppercase mt-1">Approved: ${approvedDateStr}${approvedByStr}</p>`;
+                    } else if (refund.status === 'Rejected' && refund.rejected_at) {
+                        const rejectedDate = refund.rejected_at.toDate ? refund.rejected_at.toDate() : new Date(refund.rejected_at);
+                        const rejectedDateStr = rejectedDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+                        approvalDateText = `<p class="text-[9px] text-gray-400 font-bold uppercase mt-1">Rejected: ${rejectedDateStr}</p>`;
+                    }
+
+                    const transactionInfo = refund.transaction_id ? 
+                        `<p class="text-[9px] text-gray-400 font-bold uppercase mt-1">Transaction ID: <span class="font-black text-gray-600">${refund.transaction_id}</span></p>` : 
+                        '';
+                    
+                    return `
+                        <div class="flex justify-between items-center p-6 bg-gray-50 rounded-2xl border border-gray-100 shadow-sm">
+                            <div>
+                                <p class="text-[10px] font-black text-purple-600 uppercase mb-1">Refund Request - ${refund.room_name}</p>
+                                <h4 class="text-lg font-bold">₱${(parseFloat(refund.refund_amount) || 0).toLocaleString()}</h4>
+                                <p class="text-[9px] text-gray-400 font-bold uppercase mt-1">Requested: ${requestDate}</p>
+                                ${approvalDateText}
+                                ${transactionInfo}
+                            </div>
+                            <span class="px-3 py-1 rounded-xl text-[10px] font-black uppercase ${statusStyles}">${statusIcon}${refund.status}</span>
+                        </div>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.error('Error loading refund history:', err);
+                refundContainer.innerHTML = `<div class="p-10 text-center opacity-30 text-[10px] font-black uppercase italic">Error: ${err.message}</div>`;
             }
         }
 
@@ -600,6 +848,84 @@
             if (notifId) {
                 // Mark notification as read (optional, can add API call later)
                 console.log('Dismissed notification:', notifId);
+            }
+        }
+
+        function openRefundModal(booking) {
+            document.getElementById('refund-booking-id').value = booking.id;
+            document.getElementById('refund-room-name').value = booking.room_name;
+            document.getElementById('refund-room-display').value = booking.room_name;
+            document.getElementById('refund-amount-display').value = `₱${(parseFloat(booking.amount_paid) || 0).toLocaleString()}`;
+            document.getElementById('refund-full-name').value = booking.user_name || booking.student_name || '';
+            document.getElementById('refund-contact-number').value = '';
+            document.getElementById('refund-modal').classList.remove('hidden');
+        }
+
+        function closeRefundModal() {
+            document.getElementById('refund-modal').classList.add('hidden');
+        }
+
+        async function submitRefundRequest() {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const bookingId = document.getElementById('refund-booking-id').value;
+            const roomName = document.getElementById('refund-room-name').value;
+            const fullName = document.getElementById('refund-full-name').value.trim();
+            const contactNumber = document.getElementById('refund-contact-number').value.trim();
+
+            if (!fullName || !contactNumber) {
+                alert('Please fill your full name and contact number.');
+                return;
+            }
+
+            if (!bookingId || !user.id || !roomName) {
+                alert('Missing booking information. Please close and reopen the refund modal.');
+                return;
+            }
+
+            try {
+                window.showPageLoader();
+                console.log('Submitting refund request:', { user_id: user.id, booking_id: bookingId, full_name: fullName, contact_number: contactNumber, room_name: roomName });
+
+                const res = await fetch('/api/refund/request', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: user.id,
+                        booking_id: bookingId,
+                        full_name: fullName,
+                        contact_number: contactNumber,
+                        room_name: roomName
+                    })
+                });
+
+                if (!res.ok) {
+                    let errorMsg = 'Unknown error';
+                    try {
+                        const err = await res.json();
+                        errorMsg = err.error || err.message || errorMsg;
+                    } catch (e) {
+                        errorMsg = `Server error (${res.status}): ${res.statusText}`;
+                    }
+                    console.error('Refund request failed:', errorMsg);
+                    alert('Refund request error: ' + errorMsg);
+                    return;
+                }
+
+                const data = await res.json();
+                console.log('Refund request successful:', data);
+                alert('Refund request submitted successfully. Admin will review it shortly.');
+                closeRefundModal();
+
+                try {
+                    await loadUserData(user);
+                } catch (reloadErr) {
+                    console.warn('Could not reload user data:', reloadErr);
+                }
+            } catch (err) {
+                console.error('Network error:', err);
+                alert('Network error: ' + (err.message || 'Please try again.'));
+            } finally {
+                window.hidePageLoader();
             }
         }
 

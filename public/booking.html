@@ -161,13 +161,17 @@
                         window.hidePageLoader();
                     } else {
                         window.hidePageLoader();
-                        const errData = await res.json();
-                        alert("Error: " + (errData.message || "Failed to submit booking."));
-                    }
-                } catch (error) {
-                    window.hidePageLoader();
-                    console.error("Fetch error:", error);
-                    alert("Network error. Is your server running?");
+                    const errData = await res.json().catch(() => ({}));
+                    const errMsg = errData.error || errData.message || "Failed to submit booking.";
+                    alert("Error: " + errMsg);
+                    // Redirect to home after alert so the loader state and UI remain clean.
+                    window.location.href = 'index.html';
+                }
+            } catch (error) {
+                window.hidePageLoader();
+                console.error("Fetch error:", error);
+                alert("Network error. Is your server running?");
+                window.location.href = 'index.html';
                 }
             });
         });

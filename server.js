@@ -10,6 +10,7 @@ const session = require('express-session');
 const passport = require('passport');
 const http = require('http');
 const { Server } = require('socket.io');
+const sqlite3 = require('sqlite3').verbose();
 
 const admin = require("firebase-admin");
 
@@ -74,6 +75,125 @@ async function initializeFirestore() {
 
 // Initialize Firestore data
 initializeFirestore();
+
+// --- SQLITE3 INITIALIZATION ---
+const dbPath = path.join(__dirname, 'db', 'dormbook.db');
+const sqlite3db = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+        console.error('Failed to open SQLite DB:', err.message);
+    } else {
+        console.log('✅ SQLite3 connected at:', dbPath);
+    }
+});
+
+// Initialize SQLite tables
+sqlite3db.serialize(() => {
+    sqlite3db.run(`CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        email TEXT UNIQUE,
+        password TEXT,
+        role TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`, (err) => { 
+        if (err) console.error("SQLite users table error:", err); 
+        else console.log("✔ SQLite users table ready"); 
+    });
+
+    sqlite3db.run(`CREATE TABLE IF NOT EXISTS dorms (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        price TEXT,
+        description TEXT,
+        image_url TEXT
+    )`, (err) => { 
+        if (err) console.error("SQLite dorms table error:", err); 
+        else console.log("✔ SQLite dorms table ready"); 
+    });
+
+    sqlite3db.run(`CREATE TABLE IF NOT EXISTS bookings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        room_name TEXT,
+        start_date TEXT,
+        duration TEXT,
+        special_request TEXT,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )`, (err) => { 
+        if (err) console.error("SQLite bookings table error:", err); 
+        else console.log("✔ SQLite bookings table ready"); 
+    });
+
+    sqlite3db.run(`CREATE TABLE IF NOT EXISTS action_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        admin_name TEXT,
+        action_details TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`, (err) => { 
+        if (err) console.error("SQLite action_logs table error:", err); 
+        else console.log("✔ SQLite action_logs table ready"); 
+    });
+});
+
+// --- SYNC DATA FROM FIREBASE TO SQLITE3 ---
+async function syncFirebaseToSQLite() {
+    try {
+        console.log('🔄 Starting Firebase to SQLite sync...');
+
+        // Sync Users
+        const usersSnapshot = await db.collection('users').get();
+        usersSnapshot.forEach((doc) => {
+            const user = doc.data();
+            const query = `INSERT OR REPLACE INTO users (name, email, password, role) VALUES (?, ?, ?, ?)`;
+            sqlite3db.run(query, [user.name || '', user.email || '', user.password || '', user.role || 'student'], (err) => {
+                if (err) console.error('Error syncing user:', err);
+            });
+        });
+
+        // Sync Dorms
+        const dormsSnapshot = await db.collection('dorms').get();
+        dormsSnapshot.forEach((doc) => {
+            const dorm = doc.data();
+            const query = `INSERT OR REPLACE INTO dorms (name, price, description, image_url) VALUES (?, ?, ?, ?)`;
+            sqlite3db.run(query, [dorm.name || '', dorm.price || '', dorm.description || '', dorm.image_url || ''], (err) => {
+                if (err) console.error('Error syncing dorm:', err);
+            });
+        });
+
+        // Sync Bookings
+        const bookingsSnapshot = await db.collection('bookings').get();
+        bookingsSnapshot.forEach((doc) => {
+            const booking = doc.data();
+            const query = `INSERT OR REPLACE INTO bookings (user_id, room_name, start_date, duration, special_request) VALUES (?, ?, ?, ?, ?)`;
+            sqlite3db.run(query, [
+                booking.user_id || 1, 
+                booking.room_name || '', 
+                booking.start_date || '', 
+                booking.duration || '', 
+                booking.special_request || ''
+            ], (err) => {
+                if (err) console.error('Error syncing booking:', err);
+            });
+        });
+
+        // Sync Action Logs
+        const logsSnapshot = await db.collection('action_logs').get();
+        logsSnapshot.forEach((doc) => {
+            const log = doc.data();
+            const query = `INSERT OR REPLACE INTO action_logs (admin_name, action_details) VALUES (?, ?)`;
+            sqlite3db.run(query, [log.admin_name || '', log.action_details || ''], (err) => {
+                if (err) console.error('Error syncing action log:', err);
+            });
+        });
+
+        console.log('✅ Firebase to SQLite sync completed!');
+    } catch (error) {
+        console.error('Error syncing Firebase to SQLite:', error);
+    }
+}
+
+// Run sync after a short delay to ensure tables are created
+setTimeout(syncFirebaseToSQLite, 2000);
 
 // --- MULTER CONFIGURATION ---
 const storage = multer.diskStorage({
@@ -693,20 +813,21 @@ app.get('/api/dorms', async (req, res) => {
 
         for (const dormDoc of dormsSnapshot.docs) {
             const dormData = dormDoc.data();
-            // Check if dorm is occupied by counting approved bookings
+            // Check if dorm is occupied by counting active approved bookings (exclude refunded bookings)
             const bookingsSnapshot = await db.collection('bookings')
                 .where('room_name', '==', dormData.name)
                 .where('status', '==', 'Approved')
                 .get();
 
-            // Also check for case-insensitive matches (fallback for legacy data)
-            let bookingCount = bookingsSnapshot.size;
+            // Filter to only active bookings (exclude refunded ones with is_active: false)
+            let bookingCount = bookingsSnapshot.docs.filter(doc => doc.data().is_active !== false).length;
             if (bookingCount === 0) {
                 const caseInsensitiveSnapshot = await db.collection('bookings')
                     .where('status', '==', 'Approved')
                     .get();
                 bookingCount = caseInsensitiveSnapshot.docs.filter(doc => 
-                    doc.data().room_name.toLowerCase() === dormData.name.toLowerCase()
+                    doc.data().room_name.toLowerCase() === dormData.name.toLowerCase() &&
+                    doc.data().is_active !== false
                 ).length;
             }
 
@@ -896,6 +1017,26 @@ app.post('/api/book', upload.single('receipt'), async (req, res) => {
 
         if (!user_id || !room_name) return res.status(400).json({ error: "Missing required booking data." });
 
+        // Enforce one active booking per user (exclude refunded/inactive bookings)
+        const existingBookingSnapshot = await db.collection('bookings')
+            .where('user_id', '==', user_id)
+            .get();
+
+        // Filter out refunded/inactive bookings (marked as inactive when refund is approved)
+        const userBookings = existingBookingSnapshot.docs.map(doc => doc.data());
+        const activeBooking = existingBookingSnapshot.docs.find(doc => doc.data().is_active !== false);
+        
+        console.log('Booking Creation - User Active Status:', {
+            user_id,
+            total_user_bookings: userBookings.length,
+            refunded_bookings: userBookings.filter(b => b.is_active === false).length,
+            active_bookings: userBookings.filter(b => b.is_active !== false).length
+        });
+        
+        if (activeBooking) {
+            return res.status(409).json({ error: "You already have an active booking. Only one booking is allowed per user." });
+        }
+
         // Extract duration as integer (remove " Months" suffix if present)
         const durationValue = parseInt(duration) || 1;
 
@@ -909,6 +1050,7 @@ app.post('/api/book', upload.single('receipt'), async (req, res) => {
             receipt_url,
             amount_paid: parseFloat(amount_paid) || 0,
             status: 'Pending',
+            is_active: true,
             created_at: admin.firestore.FieldValue.serverTimestamp()
         });
 
@@ -939,6 +1081,293 @@ app.get('/api/bookings/user/:userId', async (req, res) => {
         res.json(bookings || []);
     } catch (error) {
         console.error('Error fetching user bookings:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Create a new refund request from user
+app.post('/api/refund/request', async (req, res) => {
+    try {
+        const { user_id, booking_id, full_name, contact_number, room_name } = req.body;
+        console.log('Refund request received:', { user_id, booking_id, full_name, contact_number, room_name });
+        
+        if (!user_id || !booking_id || !full_name || !contact_number || !room_name) {
+            return res.status(400).json({ error: 'Missing required refund request information.' });
+        }
+
+        // Ensure booking exists and belongs to user
+        const bookingDoc = await db.collection('bookings').doc(booking_id).get();
+        console.log('Booking lookup:', { exists: bookingDoc.exists, booking_id, stored_user_id: bookingDoc.data()?.user_id, provided_user_id: user_id });
+        
+        if (!bookingDoc.exists) {
+            return res.status(404).json({ error: `Booking document not found with ID: ${booking_id}` });
+        }
+        
+        if (bookingDoc.data()?.user_id !== user_id) {
+            return res.status(403).json({ error: `Booking belongs to user ${bookingDoc.data()?.user_id}, not ${user_id}` });
+        }
+
+        const bookingData = bookingDoc.data();
+
+        // Fail-safe: only approved bookings can request refunds
+        if (bookingData.status !== 'Approved') {
+            return res.status(400).json({ error: 'Only approved bookings can request refunds.' });
+        }
+
+        // Prevent duplicate request
+        const existingSnapshot = await db.collection('refund_requests')
+            .where('booking_id', '==', booking_id)
+            .where('status', 'in', ['Pending', 'Approved'])
+            .get();
+
+        if (!existingSnapshot.empty) {
+            return res.status(409).json({ error: 'Refund request already exists for this booking.' });
+        }
+
+        // Refund amount derived from actual booking payment—user cannot set this value
+        const refundAmount = parseFloat(bookingData.amount_paid) || 0;
+
+        const requestRef = await db.collection('refund_requests').add({
+            user_id,
+            booking_id,
+            full_name,
+            contact_number,
+            room_name,
+            refund_amount: refundAmount,
+            status: 'Pending',
+            created_at: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Mark booking as having pending refund request
+        await db.collection('bookings').doc(booking_id).update({ refund_requested: true, refund_amount: refundAmount });
+
+        // Notify user about request receipt
+        await db.collection('notifications').add({
+            user_id,
+            booking_id,
+            room_name,
+            status: 'Pending',
+            message: `Refund request for ${room_name} (₱${refundAmount.toLocaleString()}) submitted.`,
+            read: false,
+            created_at: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        await db.collection('users').doc(user_id).update({
+            notif_badge_viewed_at: null,
+            notif_badge_unread: true
+        });
+
+        res.json({ success: true, refundId: requestRef.id, refund_amount: refundAmount });
+    } catch (error) {
+        console.error('Error creating refund request:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Admin: list refund requests
+app.get('/api/admin/refund-requests', async (req, res) => {
+    try {
+        const snapshot = await db.collection('refund_requests').get();
+        const requests = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                created_at: data.created_at ? data.created_at.toDate?.() || data.created_at : null,
+                approved_at: data.approved_at ? data.approved_at.toDate?.() || data.approved_at : null,
+                rejected_at: data.rejected_at ? data.rejected_at.toDate?.() || data.rejected_at : null
+            };
+        });
+        res.json(requests);
+    } catch (error) {
+        console.error('Error fetching refund requests:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// User: get refund history
+app.get('/api/refund/history/:userId', async (req, res) => {
+    try {
+        const userId = req.params.userId;
+        console.log('Fetching refund history for user:', userId);
+        
+        let snapshot;
+        try {
+            // Try with orderBy first (requires composite index)
+            snapshot = await db.collection('refund_requests')
+                .where('user_id', '==', userId)
+                .orderBy('created_at', 'desc')
+                .get();
+        } catch (indexError) {
+            // If composite index error, fetch without orderBy and sort in code
+            console.warn('Composite index not available, fetching without orderBy:', indexError.message);
+            snapshot = await db.collection('refund_requests')
+                .where('user_id', '==', userId)
+                .get();
+        }
+        
+        const requests = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                created_at: data.created_at ? data.created_at.toDate?.() || data.created_at : null,
+                approved_at: data.approved_at ? data.approved_at.toDate?.() || data.approved_at : null,
+                rejected_at: data.rejected_at ? data.rejected_at.toDate?.() || data.rejected_at : null
+            };
+        });
+
+        // Sort by created_at descending if not already sorted
+        requests.sort((a, b) => {
+            const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return dateB - dateA;
+        });
+
+        console.log(`Found ${requests.length} refund requests for user ${userId}`);
+        res.json(requests);
+    } catch (error) {
+        console.error('Error fetching refund history:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Admin approve refund request
+app.patch('/api/admin/refund-requests/:id/approve', async (req, res) => {
+    try {
+        const { adminName, transaction_id } = req.body;
+        const id = req.params.id;
+
+        const refundDoc = await db.collection('refund_requests').doc(id).get();
+        if (!refundDoc.exists) return res.status(404).json({ error: 'Refund request not found.' });
+
+        const refund = refundDoc.data();
+        console.log('Processing Refund Approval:', {
+            refund_id: id,
+            user_id: refund.user_id,
+            booking_id: refund.booking_id,
+            room_name: refund.room_name,
+            refund_amount: refund.refund_amount,
+            approved_by: adminName
+        });
+
+        await db.collection('refund_requests').doc(id).update({
+            status: 'Approved',
+            approved_by: adminName || 'Admin',
+            transaction_id: transaction_id || null,
+            approved_at: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Update associated booking: mark as inactive so room becomes available for new bookings
+        // This automatically clears due dates and balances on frontend (filtered by is_active !== false)
+        // User can now book again as the "one active booking per user" check excludes inactive bookings
+        if (refund?.booking_id) {
+            await db.collection('bookings').doc(refund.booking_id).update({
+                is_active: false,                                              // Mark stay as inactive
+                refund_status: 'Approved',                                     // Record refund status
+                refund_transaction_id: transaction_id || null,                 // Store transaction reference
+                refund_approved_at: admin.firestore.FieldValue.serverTimestamp(),  // Record approval timestamp
+                // Note: amount_paid, duration, and start_date are kept for audit trail purposes
+                // Frontend filtering (is_active !== false) ensures these don't display in My Stay
+            });
+            
+            console.log('Booking marked as inactive (refunded):', {
+                booking_id: refund.booking_id,
+                is_active: false,
+                refund_status: 'Approved'
+            });
+        }
+
+        // Notify user about refund approval
+        try {
+            const txnMsg = transaction_id ? ` Transaction ID: ${transaction_id}.` : '';
+            await db.collection('notifications').add({
+                user_id: refund.user_id,
+                booking_id: refund.booking_id,
+                room_name: refund.room_name,
+                status: 'Refund Approved',
+                message: `Your refund request for ${refund.room_name} has been approved (₱${refund.refund_amount || 0}).${txnMsg}`, 
+                read: false,
+                created_at: admin.firestore.FieldValue.serverTimestamp()
+            });
+            await db.collection('users').doc(refund.user_id).update({ notif_badge_viewed_at: null, notif_badge_unread: true });
+        } catch (notifErr) {
+            console.error('Error creating refund approval notification:', notifErr);
+        }
+
+        // Emit real-time updates to notify all connected clients
+        try {
+            const updatedBooking = await db.collection('bookings').doc(refund.booking_id).get();
+            if (updatedBooking.exists) {
+                io.emit('refund:approved', { 
+                    booking_id: refund.booking_id, 
+                    user_id: refund.user_id,
+                    room_name: refund.room_name,                      // Include room for notification
+                    refund_status: 'Approved',
+                    refund_amount: refund.refund_amount
+                });
+                console.log('Emitted refund:approved event for user:', refund.user_id);
+            }
+            // Also emit bookings update to refresh list (triggers immediate reload)
+            const snapshot = await db.collection('bookings').get();
+            const bookings = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            io.emit('bookings:updated', bookings);
+            console.log('Emitted bookings:updated event to all clients');
+        } catch (emitErr) {
+            console.error('Error emitting real-time update:', emitErr);
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error approving refund request:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Admin reject refund request
+app.patch('/api/admin/refund-requests/:id/reject', async (req, res) => {
+    try {
+        const { adminName } = req.body;
+        const id = req.params.id;
+
+        const refundDoc = await db.collection('refund_requests').doc(id).get();
+        if (!refundDoc.exists) return res.status(404).json({ error: 'Refund request not found.' });
+
+        const refund = refundDoc.data();
+
+        await db.collection('refund_requests').doc(id).update({
+            status: 'Rejected',
+            approved_by: adminName || 'Admin',
+            rejected_at: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Optionally clear booking refund flag
+        if (refund?.booking_id) {
+            await db.collection('bookings').doc(refund.booking_id).update({
+                refund_requested: false,
+                refund_status: 'Rejected'
+            });
+        }
+
+        // Notify user about refund rejection
+        try {
+            await db.collection('notifications').add({
+                user_id: refund.user_id,
+                booking_id: refund.booking_id,
+                room_name: refund.room_name,
+                status: 'Refund Rejected',
+                message: `Your refund request for ${refund.room_name} has been rejected.`,
+                read: false,
+                created_at: admin.firestore.FieldValue.serverTimestamp()
+            });
+            await db.collection('users').doc(refund.user_id).update({ notif_badge_viewed_at: null, notif_badge_unread: true });
+        } catch (notifErr) {
+            console.error('Error creating refund rejection notification:', notifErr);
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error rejecting refund request:', error);
         res.status(500).json({ error: error.message });
     }
 });
