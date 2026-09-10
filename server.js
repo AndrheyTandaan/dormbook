@@ -263,6 +263,7 @@ app.post('/api/login', async (req, res) => {
 
         const userDoc = userQuery.docs[0];
         const userData = userDoc.data();
+        const registeredEmail = String(userData.email || email).trim();
 
         const isValidPassword = await bcrypt.compare(password, userData.password);
         if (!isValidPassword) {
@@ -356,12 +357,12 @@ app.post('/api/forgot-password', async (req, res) => {
             console.log('[Forgot Password] resetLink generated:', resetLink);
 
             const templateParams = {
-                to_email: email,
+                to_email: registeredEmail,
                 user_name: userData.name,
                 reset_link: resetLink
             };
 
-            console.log('[EmailJS] Sending with params:', { to_email: email, serviceId, templateId });
+            console.log('[EmailJS] Sending with params:', { to_email: registeredEmail, serviceId, templateId });
 
             await emailjs.send(serviceId, templateId, templateParams);
             console.log(`[EmailJS] Email sent successfully to ${email}`);

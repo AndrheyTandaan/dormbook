@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Welcome | DormBook</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         html { scroll-behavior: smooth; }
@@ -110,16 +111,18 @@
                     <div class="grid grid-cols-2 gap-4">
                         <div class="space-y-2">
                             <label class="text-[10px] font-black uppercase text-gray-400 ml-2">Name</label>
-                            <input type="text" placeholder="Juan Dela Cruz" class="w-full bg-gray-50 border-none rounded-2xl p-4 focus:ring-2 focus:ring-indigo-600 transition">
+                            <input type="text" name="name" placeholder="Juan Dela Cruz" class="w-full bg-gray-50 border-none rounded-2xl p-4 focus:ring-2 focus:ring-indigo-600 transition">
                         </div>
                         <div class="space-y-2">
                             <label class="text-[10px] font-black uppercase text-gray-400 ml-2">Email</label>
-                            <input type="email" placeholder="juandelacruz@gmail.com" class="w-full bg-gray-50 border-none rounded-2xl p-4 focus:ring-2 focus:ring-indigo-600 transition">
+                            <input type="email" name="email" placeholder="juandelacruz@gmail.com" class="w-full bg-gray-50 border-none rounded-2xl p-4 focus:ring-2 focus:ring-indigo-600 transition">
                         </div>
                     </div>
                     <div class="space-y-2">
                         <label class="text-[10px] font-black uppercase text-gray-400 ml-2">Message</label>
-                        <textarea rows="4" placeholder="How can we help?" class="w-full bg-gray-50 border-none rounded-2xl p-4 focus:ring-2 focus:ring-indigo-600 transition"></textarea>
+                        <textarea name="message" rows="4" placeholder="How can we help?" class="w-full bg-gray-50 border-none rounded-2xl p-4 focus:ring-2 focus:ring-indigo-600 transition"></textarea>
+                    <input type="hidden" name="type" value="Website contact">
+                    <input type="hidden" name="subject" value="DormBook website inquiry">
                     </div>
                     <button type="submit" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition shadow-lg">Send Message</button>
                 </form>
@@ -131,5 +134,71 @@
         <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest">© 2026 DormBook — Built for Better Living</p>
     </footer>
     <script src="page-loader.js"></script>
+    <script>
+        (() => {
+            const contactForm = document.querySelector('#contact form');
+            const emailJsPublicKey = 'PhndzhYgsisQgNAWc';
+            const emailJsServiceId = 'service_gh5gj8b';
+            const emailJsTemplateId = 'template_a81xkai';
+
+            if (!contactForm || !window.emailjs) return;
+
+            emailjs.init({ publicKey: emailJsPublicKey });
+
+            const status = document.createElement('p');
+            status.setAttribute('role', 'status');
+            status.setAttribute('aria-live', 'polite');
+            status.className = 'text-xs font-bold text-center';
+            contactForm.appendChild(status);
+
+            contactForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                if (window.hidePageLoader) window.hidePageLoader();
+
+                const formData = new FormData(contactForm);
+                const name = String(formData.get('name') || '').trim();
+                const email = String(formData.get('email') || '').trim();
+                const type = String(formData.get('type') || '').trim();
+                const subject = String(formData.get('subject') || '').trim();
+                const message = String(formData.get('message') || '').trim();
+                const submitButton = contactForm.querySelector('button[type="submit"]');
+
+                if (!name || !email || !type || !subject || !message || !contactForm.querySelector('[name="email"]').checkValidity()) {
+                    status.textContent = 'Please enter your name, a valid email, and a message.';
+                    status.className = 'text-xs font-bold text-center text-red-600';
+                    return;
+                }
+
+                status.textContent = 'Sending your message...';
+                status.className = 'text-xs font-bold text-center text-gray-500';
+                if (submitButton) submitButton.disabled = true;
+
+                try {
+                    const templateParams = {
+                        name: name,
+                        email: email,
+                        type: type,
+                        subject: subject,
+                        message: message,
+                        to_email: 'admindormbook@gmail.com',
+                        reply_to: email
+                    };
+
+                    await emailjs.send(emailJsServiceId, emailJsTemplateId, templateParams);
+
+                    status.textContent = 'Message sent successfully. We will get back to you soon.';
+                    status.className = 'text-xs font-bold text-center text-green-600';
+                    contactForm.reset();
+                } catch (error) {
+                    console.error('[EmailJS] Contact form failed:', error);
+                    status.textContent = 'We could not send your message. Please try again later.';
+                    status.className = 'text-xs font-bold text-center text-red-600';
+                } finally {
+                    if (submitButton) submitButton.disabled = false;
+                    if (window.hidePageLoader) window.hidePageLoader();
+                }
+            });
+        })();
+    </script>
 </body>
 </html>
